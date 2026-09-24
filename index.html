@@ -54,7 +54,7 @@ a{color:inherit; text-decoration:none;}
   position:sticky; top:0; z-index:40;
   box-shadow:0 4px 18px -6px rgba(0,0,0,.35);
 }
-.brand{display:flex; align-items:center; gap:12px;}
+.brand{display:flex; align-items:center; gap:12px;}\n.brand-logo{width:44px;height:44px;object-fit:contain;background:#fff;border-radius:10px;padding:3px;border:2px solid rgba(234,179,8,.5);}
 .brand-mark{
   width:44px; height:44px; border-radius:12px;
   background:linear-gradient(135deg,var(--teal),var(--navy));
@@ -314,7 +314,7 @@ a{color:inherit; text-decoration:none;}
 
 <div class="topbar no-print">
   <div class="brand">
-    <div class="brand-mark">ر</div>
+    <img class="brand-logo" src="school-logo.svg" alt="شعار المدرسة">
     <div class="brand-text">
       <h1>راية لرصد الغياب</h1>
       <p>مجمع أم كلثوم بنت محمد — القسم الثانوي، مكة المكرمة</p>
@@ -1691,7 +1691,7 @@ function exportClassPDF(classId){
   }).join('');
   const html = `
   <div style="font-family:'Cairo',sans-serif; direction:rtl; padding:10px;">
-    <h2 style="color:#102a43;">تقرير غياب — ${esc(cls.name)}</h2>
+    <div style="display:flex;align-items:center;gap:14px;border-bottom:2px solid #102a43;padding-bottom:10px;margin-bottom:10px;"><img src="school-logo.svg" alt="شعار المدرسة" style="width:72px;height:72px;object-fit:contain;"><div><h2 style="color:#102a43;margin:0;">تقرير غياب — ${esc(cls.name)}</h2><p style="color:#555;font-size:13px;margin:4px 0 0;">${esc(SCHOOL_NAME)}</p></div></div>
     <p style="color:#555; font-size:13px;">${esc(SCHOOL_NAME)} — التاريخ: ${todayStr()} ${att? '— المعلمة: '+esc(att.teacher)+' — الساعة: '+esc(att.time):''}</p>
     <table style="width:100%; border-collapse:collapse; margin-top:14px;" border="1" cellpadding="8">
       <thead style="background:#102a43; color:#fff;"><tr><th>رقم الطالبة</th><th>اسم الطالبة</th><th>الحالة</th></tr></thead>
