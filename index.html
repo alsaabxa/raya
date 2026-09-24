@@ -638,14 +638,11 @@ function classCardHtml(c){
       <div class="cc-head">
         <h3>${esc(c.name)}</h3>
         ${session.type==='admin' ? `
-        <div class="cc-menu">
-          <button class="cc-menu-btn" data-menu="${c.id}">⋮</button>
-          <div class="cc-menu-list" id="menu-${c.id}">
-            <button data-edit-class="${c.id}">تعديل الفصل</button>
-            <button data-manage-students="${c.id}">إدارة الطالبات</button>
-            <button data-del-class="${c.id}">حذف الفصل</button>
-          </div>
-        </div>` : ''}
+        <div class="cc-admin-actions">
+          <button type="button" class="btn btn-sm btn-outline" data-edit-class="${c.id}">✎ تعديل</button>
+          <button type="button" class="btn btn-sm btn-outline" data-manage-students="${c.id}">👩‍🎓 الطالبات</button>
+          <button type="button" class="btn btn-sm btn-danger" data-del-class="${c.id}">🗑 حذف</button>
+        </div>`}` : ''}
       </div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${s.pct}%"></div></div>
       <div class="cc-nums"><span>نسبة الحضور <b>${s.pct}%</b></span><span>مرصود <b>${s.marked}/${s.total}</b></span></div>
@@ -728,21 +725,19 @@ function bindDashboard(){
 }
 
 function bindClassCardEvents(){
-  document.querySelectorAll('[data-menu]').forEach(btn=>{
-    btn.onclick = (e)=>{
-      e.stopPropagation();
-      document.querySelectorAll('.cc-menu-list').forEach(m=>{ if(m.id!=='menu-'+btn.dataset.menu) m.classList.remove('open'); });
-      document.getElementById('menu-'+btn.dataset.menu).classList.toggle('open');
-    };
+  document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    const cls=store.classes.find(c=>c.id===b.dataset.editClass);
+    if(cls) openClassModal(cls);
   });
-  document.addEventListener('click', (e)=>{
-    if(e.target.closest('[data-menu]') || e.target.closest('.cc-menu-list')) return;
-    document.querySelectorAll('.cc-menu-list').forEach(m=>m.classList.remove('open'));
+  document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    deleteClass(b.dataset.delClass);
   });
-
-  document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); const cls=store.classes.find(c=>c.id===b.dataset.editClass); if(cls) openClassModal(cls); });
-  document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); deleteClass(b.dataset.delClass); });
-  document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openStudentsModal(b.dataset.manageStudents); });
+  document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick = (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    openStudentsModal(b.dataset.manageStudents);
+  });
   document.querySelectorAll('[data-goto-scan]').forEach(b=> b.onclick = ()=> navigate('scan', {classId:b.dataset.gotoScan}));
   document.querySelectorAll('[data-goto-qr]').forEach(b=> b.onclick = ()=> navigate('qr', {focusClass:b.dataset.gotoQr}));
   document.querySelectorAll('[data-view-absent]').forEach(b=> b.onclick = ()=> openAbsentModal(b.dataset.viewAbsent));
@@ -966,7 +961,11 @@ function openClassModal(existing){
       }catch(err){ toast('تعذّرت قراءة الملف — تأكدي من صيغته',true); }
       finally{ editDzStatus.textContent=''; if(editFileInput) editFileInput.value=''; }
     };
-    editDz.onclick=()=>editFileInput.click();
+    editDz.onclick=(e)=>{
+      if(e.target && e.target.id==='editFileInput') return;
+      editDz.focus();
+      editFileInput.click();
+    };
     editFileInput.onchange=e=>{if(e.target.files[0]) readImportedFile(e.target.files[0]);};
     editDz.addEventListener('dragover',e=>{e.preventDefault(); editDz.classList.add('drag');});
     editDz.addEventListener('dragleave',()=>editDz.classList.remove('drag'));
@@ -980,6 +979,16 @@ function openClassModal(existing){
       document.getElementById('editBulkStudentsText').value='';
       addImportedToExistingClass(cleanNameLines(text.split(/\r?\n/)));
     };
+    document.getElementById('editBulkStudentsText').addEventListener('paste', (e)=>{
+      const text=(e.clipboardData||window.clipboardData).getData('text');
+      if(text && text.trim()){
+        setTimeout(()=>{
+          const names=cleanNameLines(text.split(/\r?\n/));
+          if(names.length) addImportedToExistingClass(names);
+          document.getElementById('editBulkStudentsText').value='';
+        },0);
+      }
+    });
 
     document.querySelectorAll('[data-move-student-inline]').forEach(b=> b.onclick = ()=>{
       openStudentFormModal(existing.id, store.students.find(s=>s.id===b.dataset.moveStudentInline), ()=> drawEditStudents(document.getElementById('editSearchS').value.trim()));
@@ -1015,8 +1024,22 @@ function openClassModal(existing){
       addNames(cleanNameLines(text.split(/\r?\n/)));
       document.getElementById('bulkStudentsText').value='';
     };
+    document.getElementById('bulkStudentsText').addEventListener('paste', (e)=>{
+      const text=(e.clipboardData||window.clipboardData).getData('text');
+      if(text && text.trim()){
+        setTimeout(()=>{
+          addNames(cleanNameLines(text.split(/\r?\n/)));
+          document.getElementById('bulkStudentsText').value='';
+          toast('تمت إضافة الأسماء الملصقة');
+        },0);
+      }
+    });
     const dz = document.getElementById('dz');
-    dz.onclick = ()=> document.getElementById('fileInput').click();
+    dz.onclick = (e)=>{
+      if(e.target && e.target.id==='fileInput') return;
+      dz.focus();
+      document.getElementById('fileInput').click();
+    };
     dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
     dz.addEventListener('dragleave', ()=> dz.classList.remove('drag'));
     dz.addEventListener('drop', e=>{
@@ -1056,7 +1079,12 @@ function openClassModal(existing){
           const wb = XLSX.read(bin, {type:'array'});
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, {header:1});
-          names = rows.filter(r=>r.length && r[0]!=='').map(r=> String(r.length>=2? r[1] : r[0]).trim()).filter(Boolean);
+          names = rows.map(r=>{
+            const cells = Array.isArray(r) ? r.map(v=>String(v??'').trim()).filter(Boolean) : [];
+            if(!cells.length) return '';
+            const nameCell = cells.find(v=>/[ء-يأ-ئؤإآ]/.test(v) && v.length >= 3);
+            return (nameCell || cells[0] || '').trim();
+          }).filter(Boolean);
         }else if(ext === 'pdf'){
           if(!window.pdfjsLib) throw new Error('pdfjs missing');
           const buf = await file.arrayBuffer();
