@@ -436,7 +436,7 @@ setInterval(tickClock, 1000); tickClock();
    المزامنة مع Google Sheets
    ========================================================================== */
 let syncTimer = null;
-async function pushToServer(action, payload){
+async function pushToServer(action, payload, syncAfter=true){
   if(!SCRIPT_URL) return { ok:false, offline:true };
   try{
     const res = await fetch(SCRIPT_URL, {
@@ -446,9 +446,9 @@ async function pushToServer(action, payload){
       body: JSON.stringify({ action, payload })
     });
     const result = await res.json();
-    // فور نجاح الإرسال، نسحب أحدث نسخة من الخادم مباشرة حتى تنعكس التغييرات فوراً
-    // على أي جهاز آخر (لوحة التحكم) دون انتظار دورة المزامنة التالية.
-    if(result && result.ok) pullFromServer(true);
+    // يمكن تعطيل السحب الفوري أثناء العمليات المتسلسلة مثل إضافة فصل
+    // حتى لا تُعاد بيانات قديمة بين حفظ الفصل وحفظ الطالبات.
+    if(result && result.ok && syncAfter) await pullFromServer(true);
     return result;
   }catch(e){ return { ok:false, error:String(e) }; }
 }
@@ -1215,16 +1215,18 @@ function openClassModal(existing){
       toast('تم حفظ الفصل والطالبات محلياً');
       // نرسل الفصل أولاً إلى ورقة Classes بشكل مستقل، ثم نرسل الطالبات.
       // هذا يضمن أن الشيت يتعرف على رقم الفصل واسمه قبل ربط الطالبات به.
-      pushToServer('saveClass', classObj).then(async r=>{
+      pushToServer('saveClass', classObj, false).then(async r=>{
         if(!r || !r.ok){
-          toast('تعذرت مزامنة الفصل مع الشيت — تأكدي من نشر Google Apps Script', true);
+          toast('تعذرت مزامنة الفصل مع الشيت: ' + (r.error || 'تحققي من نشر Google Apps Script'), true);
           return;
         }
         if(newStudents.length){
-          const results = await Promise.all(newStudents.map(s=>pushToServer('saveStudent', s)));
+          const results = await Promise.all(newStudents.map(s=>pushToServer('saveStudent', s, false)));
           const failed = results.some(x=>!x || !x.ok);
+          await pullFromServer(true);
           toast(failed ? 'تم حفظ الفصل، لكن تعذرت مزامنة بعض الطالبات' : 'تمت مزامنة الفصل ورقم الفصل والطالبات مع الشيت', failed);
         }else{
+          await pullFromServer(true);
           toast('تمت مزامنة اسم الفصل ورقم الفصل مع الشيت');
         }
       });
