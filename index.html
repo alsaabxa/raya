@@ -535,11 +535,18 @@ function navigate(name, params){
   render();
   window.scrollTo({top:0, behavior:'smooth'});
 }
+function openClassScan(classId){
+  const cls = store.classes.find(c=>String(c.id)===String(classId));
+  if(!cls){ toast('لم يتم العثور على الفصل', true); return; }
+  route = {name:'scan', classId:cls.id, editing:false};
+  render();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
 
 /* ==========================================================================
    الحسابات المساعدة
    ========================================================================== */
-function studentsOfClass(classId){ return store.students.filter(s=>s.classId===classId); }
+function studentsOfClass(classId){ return store.students.filter(s=>String(s.classId)===String(classId)); }
 function attendanceOf(classId, date){ return store.attendance.find(a=>a.classId===classId && a.date===(date||todayStr())); }
 function classStats(cls){
   const total = studentsOfClass(cls.id).length;
@@ -671,7 +678,7 @@ function classCardHtml(c){
       <div class="cc-nums"><span>نسبة الحضور <b>${s.pct}%</b></span><span>مرصود <b>${s.marked}/${s.total}</b></span></div>
       <div class="cc-nums"><span>غياب اليوم <b style="color:var(--danger)">${s.absent}</b></span></div>
       <div class="cc-actions">
-        <button class="primary" data-goto-scan="${c.id}">📋<span>رصد</span></button>
+        <button class="primary" type="button" data-open-scan="${c.id}">📋<span>رصد</span></button>
         <button data-view-absent="${c.id}">🚫<span>الغائبات</span></button>
         <button data-goto-qr="${c.id}">🔗<span>QR</span></button>
         <button data-export-xlsx="${c.id}">📊<span>Excel</span></button>
@@ -814,6 +821,7 @@ function bindDashboard(){
 }
 
 function bindClassCardEvents(){
+  document.querySelectorAll('[data-open-scan]').forEach(b=> b.onclick = ()=> openClassScan(b.dataset.openScan));
   document.querySelectorAll('[data-menu]').forEach(btn=>{
     btn.onclick = (e)=>{
       e.stopPropagation();
@@ -824,7 +832,7 @@ function bindClassCardEvents(){
   document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); const cls=store.classes.find(c=>c.id===b.dataset.editClass); if(cls) openClassModal(cls); });
   document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); deleteClass(b.dataset.delClass); });
   document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openStudentsModal(b.dataset.manageStudents); });
-  document.querySelectorAll('[data-goto-scan]').forEach(b=> b.onclick = ()=> navigate('scan', {classId:b.dataset.gotoScan}));
+  document.querySelectorAll('[data-goto-scan]').forEach(b=> b.onclick = ()=> openClassScan(b.dataset.gotoScan));
   document.querySelectorAll('[data-goto-qr]').forEach(b=> b.onclick = ()=> navigate('qr', {focusClass:b.dataset.gotoQr}));
   document.querySelectorAll('[data-view-absent]').forEach(b=> b.onclick = ()=> openAbsentModal(b.dataset.viewAbsent));
   document.querySelectorAll('[data-export-xlsx]').forEach(b=> b.onclick = ()=> exportClassExcel(b.dataset.exportXlsx));
@@ -1531,12 +1539,10 @@ function viewQR(){
   </div>`;
 }
 function classScanUrl(classId){
-  const url = new URL(window.location.href);
-  const cls = store.classes.find(c=>c.id===classId);
-  url.search = '?class=' + encodeURIComponent(classId)
+  const cls = store.classes.find(c=>String(c.id)===String(classId));
+  const base = window.location.origin + window.location.pathname;
+  return base + '?class=' + encodeURIComponent(classId)
     + (cls ? '&number=' + encodeURIComponent(cls.number||'') + '&name=' + encodeURIComponent(cls.name||'') : '');
-  url.hash = '';
-  return url.toString();
 }
 function bindQR(){
   visibleClasses().forEach(c=>{
