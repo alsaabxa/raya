@@ -1940,7 +1940,7 @@ function reportData(type, anchor, classId){
 function viewReports(){
   const firstClass=visibleClasses()[0]?.id||'';
   return `<div class="container">
-    <div style="display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;text-align:center;border-bottom:3px solid #102a43;padding:8px 8px 16px;margin-bottom:18px;"><img src="school-logo.svg" alt="شعار المدرسة" style="width:78px;height:78px;object-fit:contain;"><div><div style="font-size:20px;font-weight:800;color:#102a43;">${esc(SCHOOL_NAME)}</div><h2 style="font-size:20px;margin:5px 0;color:#0f766e;">تقرير غياب يومي - أسبوعي - شهري</h2></div><button class="btn btn-primary" id="reportPdfBtn">📄 إصدار PDF</button></div>
+    <div class="report-page-header" style="display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap;text-align:center;border-bottom:3px solid #102a43;padding:8px 8px 16px;margin-bottom:18px;"><img src="school-logo.svg" alt="شعار المدرسة" style="width:78px;height:78px;object-fit:contain;"><div><div style="font-size:20px;font-weight:800;color:#102a43;">${esc(SCHOOL_NAME)}</div><h2 style="font-size:20px;margin:5px 0;color:#0f766e;">تقرير غياب يومي - أسبوعي - شهري</h2></div><button class="btn btn-primary" id="reportPdfBtn">📄 إصدار PDF</button></div>
     <div class="card report-controls-card" style="padding:20px;margin-bottom:18px;">
       <div class="two-col">
         <div class="field"><label>نوع التقرير</label><select id="reportType"><option value="daily">يومي</option><option value="weekly">أسبوعي</option><option value="monthly">شهري</option></select></div>
