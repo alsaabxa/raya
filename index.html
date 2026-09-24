@@ -638,13 +638,10 @@ function classCardHtml(c){
       <div class="cc-head">
         <h3>${esc(c.name)}</h3>
         ${session.type==='admin' ? `
-        <div class="cc-menu">
-          <button class="cc-menu-btn" data-menu="${c.id}">⋮</button>
-          <div class="cc-menu-list" id="menu-${c.id}">
-            <button data-edit-class="${c.id}">تعديل الفصل</button>
-            <button data-manage-students="${c.id}">إدارة الطالبات</button>
-            <button data-del-class="${c.id}">حذف الفصل</button>
-          </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline btn-sm" data-edit-class="${c.id}">✎ تعديل</button>
+          <button type="button" class="btn btn-outline btn-sm" data-manage-students="${c.id}">👩‍🎓 الطالبات</button>
+          <button type="button" class="btn btn-danger btn-sm" data-del-class="${c.id}">🗑 حذف</button>
         </div>` : ''}
       </div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${s.pct}%"></div></div>
@@ -728,29 +725,35 @@ function bindDashboard(){
 }
 
 function bindClassCardEvents(){
-  document.querySelectorAll('[data-menu]').forEach(btn=>{
-    btn.onclick = (e)=>{
+  document.querySelectorAll('[data-edit-class]').forEach(b=>{
+    b.onclick=(e)=>{
+      e.preventDefault();
       e.stopPropagation();
-      document.querySelectorAll('.cc-menu-list').forEach(m=>{ if(m.id!=='menu-'+btn.dataset.menu) m.classList.remove('open'); });
-      document.getElementById('menu-'+btn.dataset.menu).classList.toggle('open');
+      const cls=store.classes.find(c=>c.id===b.dataset.editClass);
+      if(cls) openClassModal(cls);
     };
   });
-  document.addEventListener('click', (e)=>{
-    if(e.target.closest('[data-menu]') || e.target.closest('.cc-menu-list')) return;
-    document.querySelectorAll('.cc-menu-list').forEach(m=>m.classList.remove('open'));
+  document.querySelectorAll('[data-manage-students]').forEach(b=>{
+    b.onclick=(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      openStudentsModal(b.dataset.manageStudents);
+    };
   });
-
-  document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); const cls=store.classes.find(c=>c.id===b.dataset.editClass); if(cls) openClassModal(cls); });
-  document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); deleteClass(b.dataset.delClass); });
-  document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openStudentsModal(b.dataset.manageStudents); });
-  document.querySelectorAll('[data-goto-scan]').forEach(b=> b.onclick = ()=> navigate('scan', {classId:b.dataset.gotoScan}));
-  document.querySelectorAll('[data-goto-qr]').forEach(b=> b.onclick = ()=> navigate('qr', {focusClass:b.dataset.gotoQr}));
-  document.querySelectorAll('[data-view-absent]').forEach(b=> b.onclick = ()=> openAbsentModal(b.dataset.viewAbsent));
-  document.querySelectorAll('[data-export-xlsx]').forEach(b=> b.onclick = ()=> exportClassExcel(b.dataset.exportXlsx));
-  document.querySelectorAll('[data-export-pdf]').forEach(b=> b.onclick = ()=> exportClassPDF(b.dataset.exportPdf));
-  document.querySelectorAll('[data-del-today]').forEach(b=> b.onclick = ()=> deleteTodayAttendance(b.dataset.delToday));
+  document.querySelectorAll('[data-del-class]').forEach(b=>{
+    b.onclick=(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      deleteClass(b.dataset.delClass);
+    };
+  });
+  document.querySelectorAll('[data-goto-scan]').forEach(b=> b.onclick=()=>navigate('scan',{classId:b.dataset.gotoScan}));
+  document.querySelectorAll('[data-goto-qr]').forEach(b=> b.onclick=()=>navigate('qr',{focusClass:b.dataset.gotoQr}));
+  document.querySelectorAll('[data-view-absent]').forEach(b=> b.onclick=()=>openAbsentModal(b.dataset.viewAbsent));
+  document.querySelectorAll('[data-export-xlsx]').forEach(b=> b.onclick=()=>exportClassExcel(b.dataset.exportXlsx));
+  document.querySelectorAll('[data-export-pdf]').forEach(b=> b.onclick=()=>exportClassPDF(b.dataset.exportPdf));
+  document.querySelectorAll('[data-del-today]').forEach(b=> b.onclick=()=>deleteTodayAttendance(b.dataset.delToday));
 }
-
 function openAbsentModal(classId){
   const cls = store.classes.find(c=>c.id===classId);
   const att = attendanceOf(classId);
