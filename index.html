@@ -308,6 +308,20 @@ a{color:inherit; text-decoration:none;}
   .topbar, .no-print{display:none !important;}
   body{background:#fff;}
 }
+
+.report-chart{break-inside:avoid;page-break-inside:avoid;background:#fff;border:1px solid #dbe6ec;border-radius:16px;padding:18px;margin:18px 0;}
+.report-chart h3{margin:0 0 14px;color:#102a43;font-size:1rem;}
+.chart-bars{display:flex;align-items:flex-end;gap:12px;min-height:190px;padding:12px 8px 4px;border-bottom:1px solid #dbe6ec;overflow-x:auto;}
+.chart-col{min-width:58px;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;}
+.chart-value{font-size:.72rem;font-weight:800;color:#102a43;}
+.chart-bar{width:100%;max-width:48px;border-radius:8px 8px 2px 2px;min-height:4px;}
+.chart-label{font-size:.7rem;font-weight:700;color:#526b7a;text-align:center;white-space:normal;word-break:break-word;}
+.chart-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:.72rem;color:#526b7a;}
+.chart-legend span{display:inline-flex;align-items:center;gap:5px;}
+.chart-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.chart-dot.total{background:#0f766e}.chart-dot.absent{background:#dc2626}
+@media print{.report-chart{box-shadow:none;page-break-inside:avoid;break-inside:avoid}.report-chart h3,.report-chart .chart-bars,.report-chart .chart-legend{break-inside:avoid;page-break-inside:avoid}}
+
 </style>
 </head>
 <body>
@@ -1625,8 +1639,9 @@ function renderReportPreview(){
   const studentRows=d.byStudent.sort((a,b)=>b.absent-a.absent).map(x=>`<tr><td>${esc(x.name)}</td><td>${esc((store.classes.find(c=>c.id===x.classId)||{}).name||'')}</td><td>${x.days}</td><td>${x.present}</td><td>${x.absent}</td></tr>`).join('');
   document.getElementById('reportPreview').innerHTML=`<div class="card" style="padding:22px;">
     <div style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #102a43;padding-bottom:14px;margin-bottom:16px;">
-      <img src="school-logo.svg" alt="شعار المدرسة" style="width:72px;height:72px;object-fit:contain;"><div><h2 style="margin:0;color:#102a43;">${esc(SCHOOL_NAME)}</h2><div style="font-weight:800;margin-top:5px;">تقرير غياب ${d.label}</div><div style="color:#64748b;font-size:13px;">من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div></div>
-    </div>
+      <div style="display:flex;align-items:center;gap:10px;"><div class="brand-mark" aria-label="شعار منصة راية">ر</div><img src="school-logo.svg" alt="شعار المدرسة" style="width:72px;height:72px;object-fit:contain;"><div><h2 style="margin:0;color:#102a43;">${esc(SCHOOL_NAME)}</h2><div style="font-weight:800;margin-top:5px;">تقرير غياب ${d.label}</div><div style="color:#64748b;font-size:13px;">من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div></div>
+    </div></div>
+    ${buildReportCharts(d)}
     <div class="two-col" style="margin-bottom:16px;"><div class="stat-card"><b>${sessions}</b><span>أيام رصد</span></div><div class="stat-card"><b>${totalPresent}</b><span>حالات حضور</span></div><div class="stat-card"><b>${totalAbsent}</b><span>حالات غياب</span></div></div>
     <h3>ملخص الفصول</h3><div style="overflow:auto;"><table class="data-table"><thead><tr><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th><th>نسبة الحضور</th></tr></thead><tbody>${classRows||'<tr><td colspan="5">لا توجد بيانات رصد في الفترة المحددة</td></tr>'}</tbody></table></div>
     <h3 style="margin-top:22px;">تفصيل الطالبات</h3><div style="overflow:auto;"><table class="data-table"><thead><tr><th>الطالبة</th><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th></tr></thead><tbody>${studentRows||'<tr><td colspan="5">لا توجد بيانات</td></tr>'}</tbody></table></div>
@@ -1644,7 +1659,7 @@ function reportPrintHtml(type,anchor,classId){
   const totalPresent=d.byClass.reduce((n,x)=>n+x.present,0), totalAbsent=d.byClass.reduce((n,x)=>n+x.absent,0);
   const classRows=d.byClass.map(x=>`<tr><td>${esc(x.className)}</td><td>${x.days.size}</td><td>${x.present}</td><td>${x.absent}</td><td>${x.present+x.absent?Math.round(x.present/(x.present+x.absent)*100):0}%</td></tr>`).join('');
   const studentRows=d.byStudent.sort((a,b)=>b.absent-a.absent).map(x=>`<tr><td>${esc(x.name)}</td><td>${esc((store.classes.find(c=>c.id===x.classId)||{}).name||'')}</td><td>${x.days}</td><td>${x.present}</td><td>${x.absent}</td></tr>`).join('');
-  return `<div style="font-family:'Cairo',Arial,sans-serif;direction:rtl;padding:18px;color:#102a43"><div style="display:flex;align-items:center;gap:18px;border-bottom:3px solid #102a43;padding-bottom:14px"><img src="school-logo.svg" style="width:85px;height:85px;object-fit:contain"><div><div style="font-size:20px;font-weight:800">${esc(SCHOOL_NAME)}</div><div style="font-size:18px;font-weight:800;margin-top:8px">تقرير غياب ${d.label}</div><div style="color:#64748b;margin-top:5px">من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div></div></div><div style="display:flex;gap:12px;margin:18px 0"><div style="border:1px solid #ddd;padding:10px;flex:1;text-align:center"><b>${d.sessions.length}</b><br>أيام رصد</div><div style="border:1px solid #ddd;padding:10px;flex:1;text-align:center"><b>${totalPresent}</b><br>حالات حضور</div><div style="border:1px solid #ddd;padding:10px;flex:1;text-align:center"><b>${totalAbsent}</b><br>حالات غياب</div></div><h3>ملخص الفصول</h3><table style="width:100%;border-collapse:collapse" border="1" cellpadding="7"><thead><tr><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th><th>نسبة الحضور</th></tr></thead><tbody>${classRows||'<tr><td colspan="5">لا توجد بيانات</td></tr>'}</tbody></table><h3 style="margin-top:24px">تفصيل الطالبات</h3><table style="width:100%;border-collapse:collapse" border="1" cellpadding="7"><thead><tr><th>الطالبة</th><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th></tr></thead><tbody>${studentRows||'<tr><td colspan="5">لا توجد بيانات</td></tr>'}</tbody></table><div style="margin-top:24px;color:#64748b;font-size:11px">تم إصدار التقرير من منصة راية لرصد الغياب</div></div>`;
+  return `<div style="font-family:'Cairo',Arial,sans-serif;direction:rtl;padding:18px;color:#102a43"><div style="display:flex;align-items:center;gap:18px;border-bottom:3px solid #102a43;padding-bottom:14px"><div style="display:flex;align-items:center;gap:10px"><div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#0f766e,#102a43);color:#eab308;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;border:2px solid #eab308">ر</div><img src="school-logo.svg" style="width:85px;height:85px;object-fit:contain"><div><div style="font-size:20px;font-weight:800">${esc(SCHOOL_NAME)}</div><div style="font-size:18px;font-weight:800;margin-top:8px">تقرير غياب ${d.label}</div><div style="color:#64748b;margin-top:5px">من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div></div></div></div>${buildReportChartsPrint(d)}<div style="display:flex;gap:12px;margin:18px 0"><div style="border:1px solid #ddd;padding:10px;flex:1;text-align:center"><b>${d.sessions.length}</b><br>أيام رصد</div><div style="border:1px solid #ddd;padding:10px;flex:1;text-align:center"><b>${totalPresent}</b><br>حالات حضور</div><div style="border:1px solid #ddd;padding:10px;flex:1;text-align:center"><b>${totalAbsent}</b><br>حالات غياب</div></div><h3>ملخص الفصول</h3><table style="width:100%;border-collapse:collapse" border="1" cellpadding="7"><thead><tr><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th><th>نسبة الحضور</th></tr></thead><tbody>${classRows||'<tr><td colspan="5">لا توجد بيانات</td></tr>'}</tbody></table><h3 style="margin-top:24px">تفصيل الطالبات</h3><table style="width:100%;border-collapse:collapse" border="1" cellpadding="7"><thead><tr><th>الطالبة</th><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th></tr></thead><tbody>${studentRows||'<tr><td colspan="5">لا توجد بيانات</td></tr>'}</tbody></table><div style="margin-top:24px;color:#64748b;font-size:11px">تم إصدار التقرير من منصة راية لرصد الغياب</div></div>`;
 }
 function exportPeriodPDF(){
   const type=document.getElementById('reportType').value, anchor=document.getElementById('reportDate').value||todayStr(), classId=document.getElementById('reportClass').value;
