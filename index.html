@@ -752,7 +752,7 @@ function openBulkStudentManager(){
   const host=document.getElementById('modalHost'),opts=store.classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   host.innerHTML=`<div class="overlay" id="bulkOv"><div class="modal wide"><div class="modal-head"><h3>إضافة مجموعة طالبات</h3><button class="modal-close" id="bulkClose">✕</button></div><div class="modal-body"><div class="field"><label>الفصل المستهدف</label><select id="bulkTarget">${opts}</select></div><div class="bulk-drop" id="mgmtDrop"><b>📥 اسحبي الملف هنا أو اضغطي لاختياره</b><span>Excel / CSV / TXT / PDF / Word (.docx)</span><input type="file" id="mgmtFile" accept=".xlsx,.xls,.csv,.txt,.pdf,.docx"></div><textarea class="bulk-text" id="mgmtPaste" placeholder="أو الصقي أسماء الطالبات هنا — اسم في كل سطر"></textarea><div class="manage-actions" style="margin-top:10px"><button class="btn btn-primary" id="mgmtAddPasted">إضافة الأسماء</button><span id="mgmtFileStatus" style="align-self:center;color:#607987;font-size:.8rem"></span></div></div></div></div>`;
   const close=()=>host.innerHTML='';bulkClose.onclick=close;
-  const add=names=>{const target=document.getElementById('bulkTarget').value,unique=[...new Set(mgmtCleanNames(names))],existingNames=new Set(studentsOfClass(target).map(s=>s.name.trim()));if(!unique.length){toast('لم يتم العثور على أسماء',true);return;}const added=unique.filter(n=>!existingNames.has(n)).map((name,i)=>({id:uid(),classId:target,number:String(studentsOfClass(target).length+i+1),name}));store.students.push(...added);saveStore();close();navigate('classes',{manageClassId:target});toast(`تمت إضافة ${added.length} طالبة فوراً`);Promise.all(added.map(s=>pushToServer('saveStudent',s)));};
+  const add=async names=>{const target=document.getElementById('bulkTarget').value,unique=[...new Set(mgmtCleanNames(names))],existingNames=new Set(studentsOfClass(target).map(s=>s.name.trim()));if(!unique.length){toast('لم يتم العثور على أسماء',true);return;}const currentCount=studentsOfClass(target).length;const added=unique.filter(n=>!existingNames.has(n)).map((name,i)=>({id:uid(),classId:target,number:String(currentCount+i+1),name}));store.students.push(...added);saveStore();close();navigate('classes',{manageClassId:target});toast(`تمت إضافة ${added.length} طالبة محلياً، جاري الحفظ...`);const results=await Promise.all(added.map(s=>pushToServer('saveStudent',s,false)));const failed=results.some(x=>!x||!x.ok);if(!failed) await pullFromServer(true);toast(failed?'تعذرت مزامنة بعض الطالبات مع الشيت':'تم حفظ الطالبات ومزامنتها مع الشيت',failed);};
   const read=async file=>{const status=document.getElementById('mgmtFileStatus');status.textContent='جاري القراءة...';try{const names=await mgmtReadFile(file);add(names);}catch(e){status.textContent='';toast(e.message==='doc legacy'?'صيغة .doc القديمة تحتاج تحويلها إلى .docx أو PDF':'تعذرت قراءة الملف',true);}};
   const dz=document.getElementById('mgmtDrop'),fi=document.getElementById('mgmtFile');dz.onclick=e=>{if(e.target!==fi)fi.click();};fi.onchange=e=>e.target.files[0]&&read(e.target.files[0]);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();dz.classList.add('drag');}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();dz.classList.remove('drag');}));dz.addEventListener('drop',e=>{const file=e.dataTransfer?.files?.[0];if(file)read(file);});document.getElementById('mgmtPaste').onpaste=e=>{setTimeout(()=>{const t=document.getElementById('mgmtPaste').value;if(t.trim())add(t.split(/\r?\n/));},0);};document.getElementById('mgmtAddPasted').onclick=()=>{const t=document.getElementById('mgmtPaste').value;if(t.trim())add(t.split(/\r?\n/));else toast('الصقي الأسماء أولاً',true);};
 }
@@ -1213,22 +1213,27 @@ function openClassModal(existing){
       saveStore();
       close(); render();
       toast('تم حفظ الفصل والطالبات محلياً');
-      // نرسل الفصل أولاً إلى ورقة Classes بشكل مستقل، ثم نرسل الطالبات.
-      // هذا يضمن أن الشيت يتعرف على رقم الفصل واسمه قبل ربط الطالبات به.
-      pushToServer('saveClass', classObj, false).then(async r=>{
+      // نرسل الفصل والطالبات في عملية واحدة حتى لا تعود مزامنة قديمة
+      // وتحذف الطالبات من الواجهة قبل اكتمال الحفظ.
+      pushToServer('saveClassWithStudents', {classObj, students:newStudents}, false).then(async r=>{
         if(!r || !r.ok){
-          toast('تعذرت مزامنة الفصل مع الشيت: ' + (r.error || 'تحققي من نشر Google Apps Script'), true);
+          toast('تعذرت مزامنة الفصل والطالبات مع الشيت: ' + (r.error || 'تحققي من نشر Google Apps Script'), true);
           return;
         }
-        if(newStudents.length){
-          const results = await Promise.all(newStudents.map(s=>pushToServer('saveStudent', s, false)));
-          const failed = results.some(x=>!x || !x.ok);
-          await pullFromServer(true);
-          toast(failed ? 'تم حفظ الفصل، لكن تعذرت مزامنة بعض الطالبات' : 'تمت مزامنة الفصل ورقم الفصل والطالبات مع الشيت', failed);
-        }else{
-          await pullFromServer(true);
-          toast('تمت مزامنة اسم الفصل ورقم الفصل مع الشيت');
+        // نتحقق من أن الخادم أعاد الطالبات فعلاً قبل اعتماد بياناته محلياً.
+        const synced = await pullFromServer(true);
+        const serverStudents = studentsOfClass(classId);
+        if(newStudents.length && serverStudents.length < newStudents.length){
+          store.classes = store.classes.filter(x=>x.id!==classId);
+          store.students = store.students.filter(x=>x.classId!==classId);
+          store.classes.push(classObj);
+          store.students.push(...newStudents);
+          saveStore();
+          render();
+          toast('تم حفظ الفصل، لكن الطالبات لم تُسترجع من الشيت. راجعي نشر Apps Script ثم أعيدي المزامنة.', true);
+          return;
         }
+        toast(newStudents.length ? 'تمت مزامنة الفصل والطالبات مع الشيت' : 'تمت مزامنة اسم الفصل ورقم الفصل مع الشيت');
       });
     }
   };
