@@ -304,6 +304,42 @@ a{color:inherit; text-decoration:none;}
 .empty{text-align:center; padding:50px 20px; color:#8299a6;}
 .empty b{display:block; color:var(--navy); font-size:1rem; margin-bottom:6px;}
 
+
+.report-dashboard{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 18px}
+.report-kpi{background:#fff;border-radius:16px;padding:16px;box-shadow:var(--shadow);border-top:5px solid var(--teal);text-align:center}
+.report-kpi:nth-child(2){border-top-color:var(--gold)}
+.report-kpi:nth-child(3){border-top-color:#2563eb}
+.report-kpi:nth-child(4){border-top-color:#dc2626}
+.report-kpi .v{font-size:1.8rem;font-weight:800;color:var(--navy)}
+.report-kpi .l{font-size:.78rem;color:#5b7382;font-weight:700}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+.chart-card{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px;break-inside:avoid}
+.chart-card h3{font-size:1rem;color:var(--navy);margin-bottom:14px}
+.chart-row{display:grid;grid-template-columns:minmax(100px,1fr) 3fr 46px;align-items:center;gap:8px;margin:10px 0}
+.chart-label{font-size:.76rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chart-track{height:16px;background:#edf2f5;border-radius:999px;overflow:hidden}
+.chart-fill{height:100%;border-radius:999px}
+.chart-fill.present{background:#0f766e}
+.chart-fill.absent{background:#dc2626}
+.chart-fill.gold{background:#eab308}
+.chart-value{font-size:.75rem;font-weight:800;color:var(--navy);text-align:center}
+.manage-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:18px}
+.manage-card{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:20px}
+.manage-card h3{color:var(--navy);font-size:1rem;margin-bottom:14px}
+.class-manage-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+.class-manage-row.active{border-color:var(--teal);background:#f0faf8}
+.manage-drop{min-height:150px}
+.manage-help{font-size:.78rem;color:#64748b;line-height:1.8;margin-top:8px}
+@media(max-width:850px){.report-dashboard{grid-template-columns:repeat(2,1fr)}.chart-grid,.manage-grid{grid-template-columns:1fr}}
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  .report-dashboard,.chart-grid,.chart-card,.report-kpi{break-inside:avoid;page-break-inside:avoid}
+  .chart-fill.present{background:#0f766e !important}.chart-fill.absent{background:#dc2626 !important}.chart-fill.gold{background:#eab308 !important}
+  .report-kpi{box-shadow:none !important;border:1px solid #dbe6ec !important;border-top:5px solid var(--teal) !important}
+  .report-kpi:nth-child(2){border-top-color:#eab308 !important}.report-kpi:nth-child(3){border-top-color:#2563eb !important}.report-kpi:nth-child(4){border-top-color:#dc2626 !important}
+  .chart-track{background:#edf2f5 !important}
+}
+
 @media print{
   .topbar, .no-print{display:none !important;}
   body{background:#fff;}
@@ -603,6 +639,7 @@ function renderInner(){
       case 'scan': app.innerHTML = viewScan(route.classId); bindScan(); break;
       case 'qr': app.innerHTML = viewQR(); bindQR(); break;
       case 'reports': app.innerHTML = viewReports(); bindReports(); break;
+      case 'manage': app.innerHTML = viewManage(); bindManage(); break;
       case 'staff': app.innerHTML = viewStaff(); bindStaff(); break;
       default: app.innerHTML = viewDashboard(); bindDashboard();
     }
@@ -622,6 +659,7 @@ function renderTopnav(){
   links += `<a class="nav-btn ${route.name==='qr'?'active':''}" data-nav="qr">أكواد QR</a>`;
   links += `<a class="nav-btn ${route.name==='reports'?'active':''}" data-nav="reports">التقارير</a>`;
   if(session.type==='admin'){
+    links += `<a class="nav-btn ${route.name==='manage'?'active':''}" data-nav="manage">إدارة الفصول والطالبات</a>`;
     links += `<a class="nav-btn ${route.name==='staff'?'active':''}" data-nav="staff">الإداريات</a>`;
   }
   nav.innerHTML = `
@@ -1619,6 +1657,130 @@ function openStaffModal(existing){
   };
 }
 
+
+/* ==========================================================================
+   إدارة الفصول والطالبات — صفحة مستقلة
+   ========================================================================== */
+function viewManage(){
+  const classes = visibleClasses();
+  const selected = route.manageClassId || classes[0]?.id || '';
+  const cls = classes.find(c=>c.id===selected);
+  const students = cls ? studentsOfClass(cls.id).sort(byNumber) : [];
+  return `<div class="container">
+    <div class="page-title">
+      <div><h2>إدارة الفصول والطالبات</h2><p>إضافة وحذف وتعديل الطالبات والفصول بالسحب والإفلات أو النسخ واللصق</p></div>
+      <button class="btn btn-gold" id="manageAddClass">+ إضافة فصل</button>
+    </div>
+    <div class="manage-grid">
+      <div class="manage-card">
+        <h3>الفصول</h3>
+        <div id="manageClasses">
+          ${classes.map(c=>`<div class="class-manage-row ${c.id===selected?'active':''}">
+            <div><b>${esc(c.name)}</b><div style="font-size:.72rem;color:#64748b">رقم الفصل: ${esc(c.number||'—')} · ${studentsOfClass(c.id).length} طالبة</div></div>
+            <div style="display:flex;gap:5px">
+              <button class="icon-btn" data-manage-select="${esc(c.id)}" title="فتح">↗</button>
+              <button class="icon-btn" data-manage-edit="${esc(c.id)}" title="تعديل">✎</button>
+              <button class="icon-btn del" data-manage-delete="${esc(c.id)}" title="حذف">🗑</button>
+            </div>
+          </div>`).join('') || '<div class="empty"><b>لا توجد فصول</b></div>'}
+        </div>
+      </div>
+      <div class="manage-card">
+        ${cls ? `
+        <h3>طالبات فصل: ${esc(cls.name)}</h3>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input class="searchbox" id="manageStudentSearch" style="margin:0" placeholder="بحث بالاسم أو الرقم...">
+          <button class="btn btn-outline" id="manageAddStudent">+ طالبة</button>
+        </div>
+        <div class="dropzone manage-drop" id="manageDrop" tabindex="0">
+          <b>📥 اسحبي الملفات هنا أو اضغطي للاختيار</b>
+          PDF · Word DOCX · Excel XLS/XLSX/ODS · CSV · TXT
+          <input id="manageFile" type="file" multiple accept=".pdf,.docx,.xlsx,.xls,.ods,.csv,.txt" style="display:none">
+        </div>
+        <div id="manageDropStatus" class="manage-help"></div>
+        <textarea id="managePaste" rows="4" style="width:100%;margin-top:10px;padding:11px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit" placeholder="الصقي الأسماء هنا — اسم في كل سطر، أو الصقي بيانات Excel المفصولة بعلامات تبويب"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-outline btn-sm" id="managePasteBtn">إضافة الأسماء الملصقة</button>
+          <button class="btn btn-outline btn-sm" id="manageSelectAll">تحديد الكل</button>
+          <button class="btn btn-danger btn-sm" id="manageDeleteSelected">حذف المحدد</button>
+        </div>
+        <div id="manageStudentList" style="max-height:440px;overflow:auto;margin-top:14px">
+          ${students.map((s,i)=>`<div class="list-row manage-student-row" data-student-row="${esc(s.id)}">
+            <label style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer"><input type="checkbox" class="manage-student-check" value="${esc(s.id)}"><span class="info"><b>${esc(s.name)}</b><span>رقم ${esc(s.number||i+1)}</span></span></label>
+            <div class="row-actions"><button class="icon-btn" data-manage-student-edit="${esc(s.id)}">✎</button><button class="icon-btn del" data-manage-student-delete="${esc(s.id)}">🗑</button></div>
+          </div>`).join('') || '<div class="empty"><b>لا توجد طالبات في هذا الفصل</b></div>'}
+        </div>
+        ` : '<div class="empty"><b>اختاري فصلاً</b><p>أضيفي فصلاً أولاً للبدء.</p></div>'}
+      </div>
+    </div>
+  </div><div id="modalHost"></div>`;
+}
+function bindManage(){
+  const addClass=document.getElementById('manageAddClass'); if(addClass) addClass.onclick=()=>openClassModal();
+  document.querySelectorAll('[data-manage-select]').forEach(b=>b.onclick=()=>{route.manageClassId=b.dataset.manageSelect;render();});
+  document.querySelectorAll('[data-manage-edit]').forEach(b=>b.onclick=()=>openClassModal(store.classes.find(c=>c.id===b.dataset.manageEdit)));
+  document.querySelectorAll('[data-manage-delete]').forEach(b=>b.onclick=()=>deleteClass(b.dataset.manageDelete));
+  const search=document.getElementById('manageStudentSearch');
+  if(search) search.oninput=()=>document.querySelectorAll('.manage-student-row').forEach(r=>r.style.display=(r.textContent.toLowerCase().includes(search.value.trim().toLowerCase())?'':'none'));
+  document.querySelectorAll('[data-manage-student-edit]').forEach(b=>b.onclick=()=>openStudentFormModal(route.manageClassId,store.students.find(s=>s.id===b.dataset.manageStudentEdit),()=>render()));
+  document.querySelectorAll('[data-manage-student-delete]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('حذف هذه الطالبة؟'))return;
+    const id=b.dataset.manageStudentDelete; store.students=store.students.filter(s=>s.id!==id); saveStore(); await pushToServer('deleteStudent',{id}); render(); toast('تم حذف الطالبة');
+  });
+  document.getElementById('manageSelectAll')?.addEventListener('click',()=>document.querySelectorAll('.manage-student-check').forEach(x=>x.checked=true));
+  document.getElementById('manageDeleteSelected')?.addEventListener('click',async()=>{
+    const ids=[...document.querySelectorAll('.manage-student-check:checked')].map(x=>x.value);
+    if(!ids.length){toast('حددي الطالبات أولاً',true);return}
+    if(!confirm(`حذف ${ids.length} طالبة؟`))return;
+    store.students=store.students.filter(s=>!ids.includes(s.id)); saveStore();
+    for(const id of ids) await pushToServer('deleteStudent',{id});
+    render(); toast('تم حذف الطالبات المحددة');
+  });
+  document.getElementById('manageAddStudent')?.addEventListener('click',()=>openStudentFormModal(route.manageClassId,null,()=>render()));
+  const addNames=async(names)=>{
+    const clean=cleanNameLines(names.flatMap(x=>String(x||'').split(/\r?\n/))).filter(Boolean);
+    const cls=store.classes.find(c=>c.id===route.manageClassId); if(!cls||!clean.length){toast('لم يتم العثور على أسماء',true);return}
+    const existingNames=new Set(studentsOfClass(cls.id).map(s=>s.name.trim()));
+    const unique=clean.filter(n=>!existingNames.has(n));
+    if(!unique.length){toast('لا توجد أسماء جديدة',true);return}
+    let start=studentsOfClass(cls.id).length+1;
+    const batch=unique.map((name,i)=>({id:uid(),classId:cls.id,number:String(start+i),name}));
+    store.students.push(...batch);saveStore();
+    for(const st of batch) await pushToServer('saveStudent',st);
+    render();toast(`تمت إضافة ${batch.length} طالبة`);
+  };
+  const dz=document.getElementById('manageDrop'), input=document.getElementById('manageFile'), status=document.getElementById('manageDropStatus');
+  const readFile=async(file)=>{
+    const ext=(file.name.split('.').pop()||'').toLowerCase(); status.textContent='جاري قراءة '+file.name+'...';
+    try{
+      let names=[];
+      if(['xlsx','xls','ods'].includes(ext)){
+        const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+        names=rows.flatMap(r=>r.slice(0,2)).map(v=>String(v||'').trim()).filter(v=>v);
+      }else if(ext==='pdf'){
+        const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise, lines=[];
+        for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),ct=await page.getTextContent();let line='',lastY=null;ct.items.forEach(it=>{const y=it.transform[5];if(lastY!==null&&Math.abs(y-lastY)>2){if(line.trim())lines.push(line);line=''}line+=it.str;lastY=y});if(line.trim())lines.push(line)}
+        names=cleanNameLines(lines);
+      }else if(ext==='docx'){
+        const res=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()}); names=cleanNameLines(res.value.split(/\r?\n/));
+      }else{
+        names=cleanNameLines((await file.text()).split(/\r?\n/));
+      }
+      await addNames(names);
+    }catch(e){toast('تعذّرت قراءة الملف. تأكدي من أن الملف نصي/غير محمي.',true)}
+    finally{status.textContent='';input.value=''}
+  };
+  dz?.addEventListener('click',()=>input.click());
+  input?.addEventListener('change',e=>[...e.target.files].forEach(readFile));
+  dz?.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag')});
+  dz?.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+  dz?.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');[...e.dataTransfer.files].forEach(readFile)});
+  dz?.addEventListener('paste',e=>{const t=(e.clipboardData||window.clipboardData).getData('text');if(t){e.preventDefault();addNames([t])}});
+  document.getElementById('managePasteBtn')?.addEventListener('click',()=>{const t=document.getElementById('managePaste').value;document.getElementById('managePaste').value='';addNames([t])});
+}
+
 /* ==========================================================================
    التقارير اليومية والأسبوعية والشهرية
    ========================================================================== */
@@ -1688,13 +1850,23 @@ function renderReportPreview(){
   const classId=document.getElementById('reportClass').value;
   const d=reportData(type,anchor,classId);
   const totalPresent=d.byClass.reduce((n,x)=>n+x.present,0), totalAbsent=d.byClass.reduce((n,x)=>n+x.absent,0);
-  const sessions=d.sessions.length;
+  const sessions=d.sessions.length, totalCases=totalPresent+totalAbsent;
+  const attendancePct=totalCases?Math.round(totalPresent/totalCases*100):0;
   const classRows=d.byClass.map(x=>`<tr><td>${esc(x.className)}</td><td>${x.days.size}</td><td>${x.present}</td><td>${x.absent}</td><td>${x.present+x.absent?Math.round(x.present/(x.present+x.absent)*100):0}%</td></tr>`).join('');
   const studentRows=d.byStudent.sort((a,b)=>b.absent-a.absent).map(x=>`<tr><td>${esc(x.name)}</td><td>${esc((store.classes.find(c=>c.id===x.classId)||{}).name||'')}</td><td>${x.days}</td><td>${x.present}</td><td>${x.absent}</td></tr>`).join('');
-  document.getElementById('reportPreview').innerHTML=`<div class="card" style="padding:22px;">
-    <div style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #102a43;padding-bottom:14px;margin-bottom:16px;">
-      <img src="school-logo.svg" alt="شعار المدرسة" style="width:72px;height:72px;object-fit:contain;"><div><h2 style="margin:0;color:#102a43;">${esc(SCHOOL_NAME)}</h2><div style="font-weight:800;margin-top:5px;">تقرير غياب ${d.label}</div><div style="color:#64748b;font-size:13px;">من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div></div>
-    </div>
+  const maxClass=Math.max(1,...d.byClass.map(x=>Math.max(x.present,x.absent)));
+  const maxStudent=Math.max(1,...d.byStudent.map(x=>x.absent));
+  const classChart=d.byClass.slice().sort((a,b)=>b.absent-a.absent).map(x=>`<div class="chart-row"><div class="chart-label" title="${esc(x.className)}">${esc(x.className)}</div><div class="chart-track"><div class="chart-fill absent" style="width:${Math.round(x.absent/maxClass*100)}%"></div></div><div class="chart-value">${x.absent}</div></div>`).join('')||'<div class="empty">لا توجد بيانات</div>';
+  const studentChart=d.byStudent.slice().sort((a,b)=>b.absent-a.absent).slice(0,10).map(x=>`<div class="chart-row"><div class="chart-label" title="${esc(x.name)}">${esc(x.name)}</div><div class="chart-track"><div class="chart-fill gold" style="width:${Math.round(x.absent/maxStudent*100)}%"></div></div><div class="chart-value">${x.absent}</div></div>`).join('')||'<div class="empty">لا توجد بيانات</div>';
+  document.getElementById('reportPreview').innerHTML=`<div class="report-dashboard">
+    <div class="report-kpi"><div class="v">${sessions}</div><div class="l">أيام الرصد</div></div>
+    <div class="report-kpi"><div class="v">${totalPresent}</div><div class="l">حالات الحضور</div></div>
+    <div class="report-kpi"><div class="v">${totalAbsent}</div><div class="l">حالات الغياب</div></div>
+    <div class="report-kpi"><div class="v">${attendancePct}%</div><div class="l">نسبة الحضور</div></div>
+  </div>
+  <div class="chart-grid"><div class="chart-card"><h3>📊 الغياب حسب الفصول</h3>${classChart}</div><div class="chart-card"><h3>👩‍🎓 أعلى الطالبات في عدد الغياب</h3>${studentChart}</div></div>
+  <div class="card" style="padding:22px;">
+    <div style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #102a43;padding-bottom:14px;margin-bottom:16px;"><img src="school-logo.svg" alt="شعار المدرسة" style="width:72px;height:72px;object-fit:contain;"><div><h2 style="margin:0;color:#102a43;">${esc(SCHOOL_NAME)}</h2><div style="font-weight:800;margin-top:5px;">تقرير غياب ${d.label}</div><div style="color:#64748b;font-size:13px;">من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div></div></div>
     <div class="two-col" style="margin-bottom:16px;"><div class="stat-card"><b>${sessions}</b><span>أيام رصد</span></div><div class="stat-card"><b>${totalPresent}</b><span>حالات حضور</span></div><div class="stat-card"><b>${totalAbsent}</b><span>حالات غياب</span></div></div>
     <h3>ملخص الفصول</h3><div style="overflow:auto;"><table class="data-table"><thead><tr><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th><th>نسبة الحضور</th></tr></thead><tbody>${classRows||'<tr><td colspan="5">لا توجد بيانات رصد في الفترة المحددة</td></tr>'}</tbody></table></div>
     <h3 style="margin-top:22px;">تفصيل الطالبات</h3><div style="overflow:auto;"><table class="data-table"><thead><tr><th>الطالبة</th><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th></tr></thead><tbody>${studentRows||'<tr><td colspan="5">لا توجد بيانات</td></tr>'}</tbody></table></div>
