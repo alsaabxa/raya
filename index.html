@@ -735,7 +735,10 @@ function bindClassCardEvents(){
       document.getElementById('menu-'+btn.dataset.menu).classList.toggle('open');
     };
   });
-  document.addEventListener('click', ()=> document.querySelectorAll('.cc-menu-list').forEach(m=>m.classList.remove('open')), {once:true});
+  document.addEventListener('click', (e)=>{
+    if(e.target.closest('[data-menu]') || e.target.closest('.cc-menu-list')) return;
+    document.querySelectorAll('.cc-menu-list').forEach(m=>m.classList.remove('open'));
+  });
 
   document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = ()=> openClassModal(store.classes.find(c=>c.id===b.dataset.editClass)));
   document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = ()=> deleteClass(b.dataset.delClass));
