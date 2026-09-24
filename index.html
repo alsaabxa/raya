@@ -1439,6 +1439,9 @@ function printElement(html, title){
     .qr-box{display:flex; justify-content:center; margin-bottom:10px;}
     .qr-hint{font-size:11px; color:#0f766e; font-weight:700;}
     .qr-actions{display:none;}
+
+    .report-chart{page-break-inside:avoid;break-inside:avoid;}
+    @media print{.report-chart{page-break-inside:avoid;break-inside:avoid;}table{page-break-inside:auto;}tr{page-break-inside:avoid;break-inside:avoid;}}
   </style></head><body>${html}</body></html>`);
   w.document.close();
   setTimeout(()=>{ w.focus(); w.print(); }, 400);
@@ -1568,6 +1571,23 @@ function openStaffModal(existing){
 /* ==========================================================================
    التقارير اليومية والأسبوعية والشهرية
    ========================================================================== */
+function buildReportCharts(d){
+  const cp=[['#0f766e','#14b8a6'],['#2563eb','#60a5fa'],['#7c3aed','#a78bfa'],['#db2777','#f472b6'],['#ea580c','#fb923c'],['#0891b2','#22d3ee']];
+  const max=Math.max(1,...d.byClass.map(x=>x.present+x.absent));
+  const bars=d.byClass.map((x,i)=>{const t=x.present+x.absent,h=Math.max(4,Math.round(t/max*150)),p=cp[i%cp.length];return `<div class="chart-col"><div class="chart-value">${t}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,${p[0]},${p[1]});"></div><div class="chart-label">${esc(x.className)}</div></div>`;}).join('');
+  const st=d.byStudent.slice().sort((a,b)=>b.absent-a.absent).slice(0,12), ma=Math.max(1,...st.map(x=>x.absent));
+  const sb=st.map((x,i)=>{const h=Math.max(4,Math.round(x.absent/ma*150)),p=cp[i%cp.length];return `<div class="chart-col"><div class="chart-value">${x.absent}</div><div class="chart-bar" style="height:${h}px;background:linear-gradient(180deg,${p[0]},${p[1]});"></div><div class="chart-label">${esc(x.name)}</div></div>`;}).join('');
+  return `<div class="report-chart"><h3>الرصد حسب الفصول</h3><div class="chart-bars">${bars||'لا توجد بيانات'}</div></div><div class="report-chart"><h3>أسماء الطالبات — حالات الغياب</h3><div class="chart-bars">${sb||'لا توجد بيانات'}</div></div>`;
+}
+function buildReportChartsPrint(d){
+  const cp=['#0f766e','#2563eb','#7c3aed','#db2777','#ea580c','#0891b2'];
+  const max=Math.max(1,...d.byClass.map(x=>x.present+x.absent));
+  const bars=d.byClass.map((x,i)=>`<div style="flex:1;min-width:45px;text-align:center"><div style="font-size:10px;font-weight:800">${x.present+x.absent}</div><div style="height:${Math.max(4,Math.round((x.present+x.absent)/max*130))}px;background:${cp[i%cp.length]};border-radius:7px 7px 2px 2px;margin:3px auto;width:70%;"></div><div style="font-size:9px;font-weight:700;word-break:break-word">${esc(x.className)}</div></div>`).join('');
+  const st=d.byStudent.slice().sort((a,b)=>b.absent-a.absent).slice(0,12),ma=Math.max(1,...st.map(x=>x.absent));
+  const sb=st.map(x=>`<div style="flex:1;min-width:45px;text-align:center"><div style="font-size:10px;font-weight:800">${x.absent}</div><div style="height:${Math.max(4,Math.round(x.absent/ma*130))}px;background:#dc2626;border-radius:7px 7px 2px 2px;margin:3px auto;width:70%;"></div><div style="font-size:9px;font-weight:700;word-break:break-word">${esc(x.name)}</div></div>`).join('');
+  return `<div style="page-break-inside:avoid;break-inside:avoid;border:1px solid #dbe6ec;border-radius:12px;padding:12px;margin:16px 0"><h3 style="margin:0 0 10px;color:#102a43">الرصد حسب الفصول</h3><div style="display:flex;align-items:flex-end;gap:6px;min-height:155px;padding:5px">${bars||'لا توجد بيانات'}</div></div><div style="page-break-inside:avoid;break-inside:avoid;border:1px solid #dbe6ec;border-radius:12px;padding:12px;margin:16px 0"><h3 style="margin:0 0 10px;color:#102a43">أسماء الطالبات — حالات الغياب</h3><div style="display:flex;align-items:flex-end;gap:6px;min-height:155px;padding:5px">${sb||'لا توجد بيانات'}</div></div>`;
+}
+
 function reportRange(type, startValue){
   const end = new Date(startValue + 'T00:00:00');
   let start = new Date(end);
