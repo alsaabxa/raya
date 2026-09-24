@@ -7,10 +7,13 @@ function classCardHtml(c){
       <div class="cc-head">
         <h3>${esc(c.name)}</h3>
         ${session.type==='admin' ? `
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn btn-outline btn-sm" data-edit-class="${c.id}">✎ تعديل</button>
-          <button type="button" class="btn btn-outline btn-sm" data-manage-students="${c.id}">👩‍🎓 الطالبات</button>
-          <button type="button" class="btn btn-danger btn-sm" data-del-class="${c.id}">🗑 حذف</button>
+        <div class="cc-menu">
+          <button type="button" class="cc-menu-btn" data-menu="${c.id}" aria-label="خيارات الفصل">⋮</button>
+          <div class="cc-menu-list" id="menu-${c.id}">
+            <button type="button" data-edit-class="${c.id}">✎ تعديل الفصل</button>
+            <button type="button" data-manage-students="${c.id}">👩‍🎓 إدارة الطالبات</button>
+            <button type="button" data-del-class="${c.id}">🗑 حذف الفصل</button>
+          </div>
         </div>` : ''}
       </div>
       <div class="progress-wrap"><div class="progress-bar" style="width:${s.pct}%"></div></div>
@@ -57,8 +60,6 @@ function classCardHtml(c){
   </div>`;
 }
 
-window.rayaEditClass=function(id){const cls=store.classes.find(c=>c.id===id);if(cls) openClassModal(cls);};
-window.rayaManageStudents=function(id){openStudentsModal(id);};
 function filteredDashboardClasses(){
   const q = (dashboardQuery||'').trim();
   const classes = visibleClasses();
@@ -126,27 +127,25 @@ function bindDashboard(){
 }
 
 function bindClassCardEvents(){
-  document.querySelectorAll('[data-edit-class]').forEach(b=>{
-    b.onclick=(e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      const cls=store.classes.find(c=>c.id===b.dataset.editClass);
-      if(cls) openClassModal(cls);
+  document.querySelectorAll('[data-menu]').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      document.querySelectorAll('.cc-menu-list.open').forEach(m=>{if(m!==btn.nextElementSibling)m.classList.remove('open');});
+      btn.nextElementSibling.classList.toggle('open');
     };
   });
-  document.querySelectorAll('[data-manage-students]').forEach(b=>{
-    b.onclick=(e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      openStudentsModal(b.dataset.manageStudents);
-    };
+  document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick=(e)=>{
+    e.preventDefault(); e.stopPropagation();
+    const cls=store.classes.find(c=>c.id===b.dataset.editClass);
+    if(cls) openClassModal(cls);
   });
-  document.querySelectorAll('[data-del-class]').forEach(b=>{
-    b.onclick=(e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      deleteClass(b.dataset.delClass);
-    };
+  document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick=(e)=>{
+    e.preventDefault(); e.stopPropagation();
+    openStudentsModal(b.dataset.manageStudents);
+  });
+  document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick=(e)=>{
+    e.preventDefault(); e.stopPropagation();
+    deleteClass(b.dataset.delClass);
   });
   document.querySelectorAll('[data-goto-scan]').forEach(b=> b.onclick=()=>navigate('scan',{classId:b.dataset.gotoScan}));
   document.querySelectorAll('[data-goto-qr]').forEach(b=> b.onclick=()=>navigate('qr',{focusClass:b.dataset.gotoQr}));
@@ -155,6 +154,7 @@ function bindClassCardEvents(){
   document.querySelectorAll('[data-export-pdf]').forEach(b=> b.onclick=()=>exportClassPDF(b.dataset.exportPdf));
   document.querySelectorAll('[data-del-today]').forEach(b=> b.onclick=()=>deleteTodayAttendance(b.dataset.delToday));
 }
+
 function openAbsentModal(classId){
   const cls = store.classes.find(c=>c.id===classId);
   const att = attendanceOf(classId);
