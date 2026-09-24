@@ -112,7 +112,7 @@ a{color:inherit; text-decoration:none;}
 .classes-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:18px;}
 .class-card{
   background:#fff; border-radius:var(--radius); box-shadow:var(--shadow);
-  overflow:hidden; display:flex; flex-direction:column;
+  overflow:visible; display:flex; flex-direction:column;
 }
 .class-card .cc-top{height:6px; background:linear-gradient(90deg,var(--teal),var(--navy));}
 .class-card .cc-body{padding:18px; display:flex; flex-direction:column; gap:12px;}
@@ -122,8 +122,8 @@ a{color:inherit; text-decoration:none;}
 .cc-menu-btn{color:#8299a6; font-size:1.2rem; padding:2px 8px; border-radius:6px;}
 .cc-menu-btn:hover{background:#eef3f5;}
 .cc-menu-list{
-  position:absolute; left:0; top:28px; background:#fff; border-radius:10px;
-  box-shadow:var(--shadow); border:1px solid var(--line); min-width:140px; z-index:10; display:none; overflow:hidden;
+  position:absolute; left:0; top:30px; background:#fff; border-radius:10px;
+  box-shadow:0 12px 30px rgba(16,42,67,.18); border:1px solid var(--line); min-width:170px; z-index:9999; display:none; overflow:hidden;
 }
 .cc-menu-list.open{display:block;}
 .cc-menu-list button{display:block; width:100%; text-align:right; padding:10px 14px; font-size:.85rem; font-weight:600;}
@@ -740,9 +740,9 @@ function bindClassCardEvents(){
     document.querySelectorAll('.cc-menu-list').forEach(m=>m.classList.remove('open'));
   });
 
-  document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = ()=> openClassModal(store.classes.find(c=>c.id===b.dataset.editClass)));
-  document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = ()=> deleteClass(b.dataset.delClass));
-  document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick = ()=> openStudentsModal(b.dataset.manageStudents));
+  document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); const cls=store.classes.find(c=>c.id===b.dataset.editClass); if(cls) openClassModal(cls); });
+  document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); deleteClass(b.dataset.delClass); });
+  document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openStudentsModal(b.dataset.manageStudents); });
   document.querySelectorAll('[data-goto-scan]').forEach(b=> b.onclick = ()=> navigate('scan', {classId:b.dataset.gotoScan}));
   document.querySelectorAll('[data-goto-qr]').forEach(b=> b.onclick = ()=> navigate('qr', {focusClass:b.dataset.gotoQr}));
   document.querySelectorAll('[data-view-absent]').forEach(b=> b.onclick = ()=> openAbsentModal(b.dataset.viewAbsent));
