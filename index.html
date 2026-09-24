@@ -158,6 +158,24 @@ a{color:inherit; text-decoration:none;}
 .btn-sm{padding:7px 12px; font-size:.8rem;}
 .btn[disabled]{opacity:.5; cursor:not-allowed;}
 
+/* ---------- إدارة الفصول والطالبات ---------- */
+.manage-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.manage-layout{display:grid;grid-template-columns:280px 1fr;gap:16px}
+.manage-panel,.manage-main{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+.manage-class-btn{width:100%;text-align:right;padding:12px;border:1px solid var(--line);background:#fff;border-radius:10px;margin-bottom:7px;cursor:pointer;font-weight:700;color:var(--navy)}
+.manage-class-btn.active{background:#e8f5f2;border-color:var(--teal);color:var(--teal)}
+.manage-student-row{display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #edf2f4}
+.manage-student-row:last-child{border-bottom:0}
+.manage-student-row .m-info{flex:1}
+.manage-student-row .m-info b{display:block}
+.manage-student-row .m-info span{font-size:.75rem;color:#6b8190}
+.manage-actions{display:flex;gap:6px;flex-wrap:wrap}
+.bulk-drop{border:2px dashed var(--line);border-radius:14px;padding:22px;text-align:center;background:#fbfdfe;cursor:pointer;margin:12px 0}
+.bulk-drop.drag{border-color:var(--teal);background:#eefaf8}
+.bulk-drop b{display:block;color:var(--teal);font-size:1rem;margin-bottom:5px}
+.bulk-drop input{display:none}
+.bulk-text{width:100%;min-height:130px;padding:12px;border:1.5px solid var(--line);border-radius:12px;resize:vertical;font-family:inherit}
+@media(max-width:760px){.manage-layout{grid-template-columns:1fr}.manage-panel{order:2}.manage-main{order:1}}
 /* ---------- Login ---------- */
 .login-wrap{min-height:calc(100vh - 76px); display:flex; align-items:center; justify-content:center; padding:20px;}
 .login-card{
@@ -577,6 +595,7 @@ function renderTopnav(){
   links += `<a class="nav-btn ${route.name==='reports'?'active':''}" data-nav="reports">التقارير</a>`;
   if(session.type==='admin'){
     links += `<a class="nav-btn ${route.name==='staff'?'active':''}" data-nav="staff">الإداريات</a>`;
+    links += `<a class="nav-btn ${route.name==='classes'?'active':''}" data-nav="classes">إدارة الفصول والطالبات</a>`;
   }
   nav.innerHTML = `
     ${links}
@@ -669,6 +688,72 @@ function filteredDashboardClasses(){
     if(c.name.includes(q) || String(c.number||'').includes(q)) return true;
     return studentsOfClass(c.id).some(s=> s.name.includes(q) || String(s.number||'').includes(q));
   });
+}
+function mgmtCleanNames(lines){
+  return (lines||[]).map(x=>String(x??'').replace(/\u200f|\u200e/g,'').trim()).map(x=>x.replace(/^[\d٠-٩]+[\.\-\)]\s*/,'').trim()).filter(x=>x && !/^[\d٠-٩\s]+$/.test(x));
+}
+
+async function mgmtReadFile(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(ext==='xlsx'||ext==='xls'){
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}), ws=wb.Sheets[wb.SheetNames[0]], rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    return mgmtCleanNames(rows.map(r=>{const cells=(Array.isArray(r)?r:[]).map(v=>String(v??'').trim()).filter(Boolean);return cells.find(v=>/[ء-يأ-ئؤإآ]/.test(v)&&v.length>=3)||cells[0]||'';}));
+  }
+  if(ext==='pdf'){
+    if(!window.pdfjsLib)throw new Error('pdfjs missing');
+    const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,lines=[];
+    for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),items=(await page.getTextContent()).items;let line='',lastY=null;items.forEach(it=>{const y=it.transform[5];if(lastY!==null&&Math.abs(y-lastY)>2){if(line.trim())lines.push(line);line='';}line+=it.str;lastY=y;});if(line.trim())lines.push(line);}
+    return mgmtCleanNames(lines);
+  }
+  if(ext==='docx'){if(!window.mammoth)throw new Error('mammoth missing');const r=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});return mgmtCleanNames(r.value.split(/\r?\n/));}
+  if(ext==='doc')throw new Error('doc legacy');
+  return mgmtCleanNames((await file.text()).split(/\r?\n/));
+}
+
+function viewClassStudentManagement(){
+  const classes=store.classes.slice().sort((a,b)=>String(a.number||'').localeCompare(String(b.number||''),'ar',{numeric:true}));
+  const selectedId=route.manageClassId||(classes[0]&&classes[0].id),cls=classes.find(c=>c.id===selectedId)||classes[0];
+  const students=cls?studentsOfClass(cls.id).sort((a,b)=>String(a.number||'').localeCompare(String(b.number||''),'ar',{numeric:true})):[];
+  return `<div class="container"><div class="page-title"><div><h2>إدارة الفصول والطالبات</h2><p>إضافة جماعية، نسخ ولصق، سحب وإفلات، ونقل الطالبات بين الفصول</p></div><button class="btn btn-gold" id="mgmtAddClass">+ إضافة فصل</button></div>
+  <div class="manage-toolbar"><button class="btn btn-outline" id="mgmtAddGroup">+ إضافة مجموعة طالبات</button><button class="btn btn-outline" id="mgmtMove">↔ نقل المحددات</button><button class="btn btn-outline" id="mgmtSelectAll">☑ تحديد الكل</button><button class="btn btn-outline" id="mgmtRefresh">↻ تحديث</button></div>
+  <div class="manage-layout"><aside class="manage-panel"><h3 style="margin-bottom:12px">الفصول (${classes.length})</h3>${classes.map(c=>`<button class="manage-class-btn ${cls&&c.id===cls.id?'active':''}" data-mgmt-class="${c.id}">${esc(c.name)} <span style="float:left;color:#718794">(${studentsOfClass(c.id).length})</span></button>`).join('')||'<div class="empty">لا توجد فصول</div>'}</aside>
+  <section class="manage-main">${cls?`<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><div><h3>${esc(cls.name)}</h3><small style="color:#718794">${students.length} طالبة</small></div><div class="manage-actions"><button class="btn btn-sm btn-outline" id="mgmtEditClass">✎ تعديل الفصل</button><button class="btn btn-sm btn-danger" id="mgmtDeleteClass">🗑 حذف الفصل</button></div></div>
+  <input class="searchbox" id="mgmtSearch" placeholder="🔍 بحث عن طالبة..." style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span id="mgmtSelectedCount" style="color:#607987;font-size:.82rem">0 محددة</span><button class="btn btn-sm btn-outline" id="mgmtAddOne">+ طالبة</button></div>
+  <div id="mgmtStudents">${students.map(s=>`<label class="manage-student-row" data-student-row="${s.id}"><input type="checkbox" class="mgmt-check" value="${s.id}"><div class="m-info"><b>${esc(s.name)}</b><span>رقم ${esc(s.number||'')}</span></div><div class="manage-actions"><button type="button" class="icon-btn" data-mgmt-edit="${s.id}">✎</button><button type="button" class="icon-btn del" data-mgmt-delete="${s.id}">🗑</button></div></label>`).join('')||'<div class="empty">لا توجد طالبات في هذا الفصل</div>'}</div>`:'<div class="empty"><b>لا يوجد فصل</b><p>أضيفي فصلًا أولاً.</p></div>'}</section></div></div><div id="modalHost"></div>`;
+}
+
+function bindClassStudentManagement(){
+  document.querySelectorAll('[data-mgmt-class]').forEach(b=>b.onclick=()=>navigate('classes',{manageClassId:b.dataset.mgmtClass}));
+  const clsId=route.manageClassId||(store.classes[0]&&store.classes[0].id),cls=store.classes.find(c=>c.id===clsId)||store.classes[0];
+  const selected=()=>[...document.querySelectorAll('.mgmt-check:checked')].map(x=>x.value);
+  const updateCount=()=>{const e=document.getElementById('mgmtSelectedCount');if(e)e.textContent=selected().length+' محددة';};
+  document.querySelectorAll('.mgmt-check').forEach(x=>x.onchange=updateCount);
+  document.getElementById('mgmtSelectAll')?.addEventListener('click',()=>{document.querySelectorAll('.mgmt-check').forEach(x=>x.checked=true);updateCount();});
+  document.getElementById('mgmtRefresh')?.addEventListener('click',()=>pullFromServer(false));
+  document.getElementById('mgmtAddClass')?.addEventListener('click',()=>openClassModal());
+  document.getElementById('mgmtAddOne')?.addEventListener('click',()=>openStudentFormModal(cls.id,null,()=>navigate('classes',{manageClassId:cls.id})));
+  document.getElementById('mgmtEditClass')?.addEventListener('click',()=>openClassModal(cls));
+  document.getElementById('mgmtDeleteClass')?.addEventListener('click',()=>deleteClass(cls.id));
+  document.querySelectorAll('[data-mgmt-edit]').forEach(b=>b.onclick=()=>openStudentFormModal(cls.id,store.students.find(s=>s.id===b.dataset.mgmtEdit),()=>navigate('classes',{manageClassId:cls.id})));
+  document.querySelectorAll('[data-mgmt-delete]').forEach(b=>b.onclick=async()=>{if(!confirm('حذف هذه الطالبة؟'))return;const id=b.dataset.mgmtDelete;store.students=store.students.filter(s=>s.id!==id);saveStore();navigate('classes',{manageClassId:cls.id});pushToServer('deleteStudent',{id});});
+  document.getElementById('mgmtSearch')?.addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();document.querySelectorAll('[data-student-row]').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(q)?'flex':'none');});
+  document.getElementById('mgmtMove')?.addEventListener('click',()=>{
+    const ids=selected();if(!ids.length){toast('حددي طالبة واحدة على الأقل',true);return;}
+    const opts=store.classes.filter(c=>c.id!==cls.id).map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');if(!opts){toast('لا يوجد فصل آخر للنقل إليه',true);return;}
+    const host=document.getElementById('modalHost');host.innerHTML=`<div class="overlay" id="moveOv"><div class="modal"><div class="modal-head"><h3>نقل ${ids.length} طالبة</h3><button class="modal-close" id="moveClose">✕</button></div><div class="modal-body"><div class="field"><label>الفصل الجديد</label><select id="moveTarget">${opts}</select></div><p style="color:#718794;font-size:.82rem">سيتم نقل الطالبات المحددات.</p></div><div class="modal-foot"><button class="btn btn-outline" id="moveCancel">إلغاء</button><button class="btn btn-primary" id="moveSave">نقل الطالبات</button></div></div></div>`;
+    const close=()=>host.innerHTML='';moveClose.onclick=close;moveCancel.onclick=close;
+    moveSave.onclick=()=>{const target=document.getElementById('moveTarget').value,moved=ids.map(id=>store.students.find(s=>s.id===id)).filter(Boolean);moved.forEach(s=>s.classId=target);saveStore();close();navigate('classes',{manageClassId:target});toast(`تم نقل ${moved.length} طالبة فوراً`);Promise.all(moved.map(s=>pushToServer('saveStudent',s)));};
+  });
+  document.getElementById('mgmtAddGroup')?.addEventListener('click',()=>openBulkStudentManager());
+}
+
+function openBulkStudentManager(){
+  const host=document.getElementById('modalHost'),opts=store.classes.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  host.innerHTML=`<div class="overlay" id="bulkOv"><div class="modal wide"><div class="modal-head"><h3>إضافة مجموعة طالبات</h3><button class="modal-close" id="bulkClose">✕</button></div><div class="modal-body"><div class="field"><label>الفصل المستهدف</label><select id="bulkTarget">${opts}</select></div><div class="bulk-drop" id="mgmtDrop"><b>📥 اسحبي الملف هنا أو اضغطي لاختياره</b><span>Excel / CSV / TXT / PDF / Word (.docx)</span><input type="file" id="mgmtFile" accept=".xlsx,.xls,.csv,.txt,.pdf,.docx"></div><textarea class="bulk-text" id="mgmtPaste" placeholder="أو الصقي أسماء الطالبات هنا — اسم في كل سطر"></textarea><div class="manage-actions" style="margin-top:10px"><button class="btn btn-primary" id="mgmtAddPasted">إضافة الأسماء</button><span id="mgmtFileStatus" style="align-self:center;color:#607987;font-size:.8rem"></span></div></div></div></div>`;
+  const close=()=>host.innerHTML='';bulkClose.onclick=close;
+  const add=names=>{const target=document.getElementById('bulkTarget').value,unique=[...new Set(mgmtCleanNames(names))],existingNames=new Set(studentsOfClass(target).map(s=>s.name.trim()));if(!unique.length){toast('لم يتم العثور على أسماء',true);return;}const added=unique.filter(n=>!existingNames.has(n)).map((name,i)=>({id:uid(),classId:target,number:String(studentsOfClass(target).length+i+1),name}));store.students.push(...added);saveStore();close();navigate('classes',{manageClassId:target});toast(`تمت إضافة ${added.length} طالبة فوراً`);Promise.all(added.map(s=>pushToServer('saveStudent',s)));};
+  const read=async file=>{const status=document.getElementById('mgmtFileStatus');status.textContent='جاري القراءة...';try{const names=await mgmtReadFile(file);add(names);}catch(e){status.textContent='';toast(e.message==='doc legacy'?'صيغة .doc القديمة تحتاج تحويلها إلى .docx أو PDF':'تعذرت قراءة الملف',true);}};
+  const dz=document.getElementById('mgmtDrop'),fi=document.getElementById('mgmtFile');dz.onclick=e=>{if(e.target!==fi)fi.click();};fi.onchange=e=>e.target.files[0]&&read(e.target.files[0]);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();dz.classList.add('drag');}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();e.stopPropagation();dz.classList.remove('drag');}));dz.addEventListener('drop',e=>{const file=e.dataTransfer?.files?.[0];if(file)read(file);});document.getElementById('mgmtPaste').onpaste=e=>{setTimeout(()=>{const t=document.getElementById('mgmtPaste').value;if(t.trim())add(t.split(/\r?\n/));},0);};document.getElementById('mgmtAddPasted').onclick=()=>{const t=document.getElementById('mgmtPaste').value;if(t.trim())add(t.split(/\r?\n/));else toast('الصقي الأسماء أولاً',true);};
 }
 function viewDashboard(){
   const allClasses = visibleClasses();
