@@ -87,6 +87,16 @@ a{color:inherit; text-decoration:none;}
 }
 .user-chip .dot{width:8px; height:8px; border-radius:50%; background:var(--gold);}
 .logout-btn{color:#f2b8b8; font-weight:700; font-size:.85rem;}
+.notify-wrap{position:relative;}
+.notify-btn{position:relative;color:#e7eff3;padding:8px 12px;border-radius:10px;font-size:1.05rem;}
+.notify-btn:hover{background:rgba(255,255,255,.1);}
+.notify-badge{position:absolute;top:2px;left:3px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--danger);color:#fff;font-size:.62rem;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--navy);}
+.notify-panel{position:absolute;top:46px;right:0;width:320px;max-width:calc(100vw - 30px);background:#fff;color:var(--text);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 40px -12px rgba(16,42,67,.3);display:none;overflow:hidden;z-index:80;}
+.notify-panel.open{display:block;}
+.notify-head{padding:12px 14px;border-bottom:1px solid var(--line);font-weight:800;color:var(--navy);display:flex;justify-content:space-between;gap:8px;}
+.notify-item{padding:11px 14px;border-bottom:1px solid #eef2f4;font-size:.78rem;line-height:1.7;}
+.notify-item:last-child{border-bottom:0;}
+.notify-empty{padding:18px 14px;text-align:center;color:#8299a6;font-size:.8rem;}
 
 /* ---------- Layout ---------- */
 .container{max-width:1240px; margin:0 auto; padding:26px 20px 60px;}
@@ -240,6 +250,13 @@ a{color:inherit; text-decoration:none;}
 }
 .scan-head h2{font-size:1.3rem; font-weight:800; position:relative;}
 .scan-head p{font-size:.85rem; color:#cfe0e8; margin-top:4px; position:relative;}
+.scan-class-card{background:#fff;border:2px solid var(--gold);border-radius:18px;box-shadow:0 10px 28px -12px rgba(16,42,67,.25);padding:16px 18px;margin-bottom:16px;position:relative;overflow:hidden;}
+.scan-class-card::before{content:'';position:absolute;right:0;top:0;bottom:0;width:6px;background:linear-gradient(180deg,var(--gold),var(--teal));}
+.scan-class-main{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.scan-class-title{font-size:1.15rem;font-weight:800;color:var(--navy);}
+.scan-class-number{display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:42px;padding:0 12px;border-radius:12px;background:var(--navy);color:var(--gold);font-size:1.15rem;font-weight:800;}
+.scan-class-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.scan-class-meta span{background:var(--bg1);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:.72rem;font-weight:700;color:#5b7382;}
 .teacher-field{margin-top:16px; position:relative;}
 .teacher-field input, .teacher-field select{
   width:100%; padding:11px 14px; border-radius:10px; border:none; text-align:center; font-weight:700; color:var(--navy);
@@ -620,6 +637,28 @@ function visibleClasses(){
   if(session.type==='admin') return store.classes;
   return store.classes.filter(c=> (session.classes||[]).includes(c.id));
 }
+function notificationData(){
+  const items=[];
+  const today=todayStr();
+  (store.attendance||[]).filter(a=>a.date===today).forEach(a=>{
+    const cls=store.classes.find(c=>c.id===a.classId);
+    const absent=(a.records||[]).filter(r=>r.status==='غائب').length;
+    if(absent) items.push({kind:'absent',text:`فصل ${cls?cls.name:'غير معروف'}: ${absent} غائبة اليوم`});
+    if(a.pending) items.push({kind:'pending',text:`رصد فصل ${cls?cls.name:'غير معروف'} بانتظار المزامنة`});
+  });
+  return items;
+}
+function notificationBellHtml(){
+  const items=notificationData();
+  const count=items.length;
+  return `<div class="notify-wrap" id="notifyWrap">
+    <button class="notify-btn" id="notifyBtn" title="التنبيهات" aria-label="التنبيهات">🔔${count?`<span class="notify-badge">${count>99?'99+':count}</span>`:''}</button>
+    <div class="notify-panel" id="notifyPanel">
+      <div class="notify-head"><span>التنبيهات</span><span style="font-size:.72rem;color:#8299a6;">اليوم ${todayStr()}</span></div>
+      ${items.length?items.map(x=>`<div class="notify-item">🔔 <b>${esc(x.text)}</b></div>`).join(''):'<div class="notify-empty">لا توجد تنبيهات حالياً</div>'}
+    </div>
+  </div>`;
+}
 
 /* ==========================================================================
    العرض الرئيسي
@@ -673,11 +712,18 @@ function renderTopnav(){
   }
   nav.innerHTML = `
     ${links}
+    ${notificationBellHtml()}
     <div class="user-chip"><span class="dot"></span> ${esc(session.name)}</div>
     <button class="nav-btn logout-btn" id="logoutBtn">خروج</button>
   `;
   nav.querySelectorAll('[data-nav]').forEach(el=> el.onclick = ()=> navigate(el.dataset.nav));
   document.getElementById('logoutBtn').onclick = logout;
+  const notifyBtn=document.getElementById('notifyBtn');
+  const notifyPanel=document.getElementById('notifyPanel');
+  if(notifyBtn && notifyPanel){
+    notifyBtn.onclick=(e)=>{e.stopPropagation();notifyPanel.classList.toggle('open');};
+    document.addEventListener('click',()=>notifyPanel.classList.remove('open'),{once:true});
+  }
 }
 
 /* ==========================================================================
@@ -949,7 +995,7 @@ function openClassModal(existing){
         <div class="field">
           <label style="color:#5b7382;">3) نسخ ولصق قائمة أسماء كاملة (اسم واحد في كل سطر)</label>
           <textarea id="bulkStudentsText" rows="3" style="width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid var(--line); background:var(--bg1); resize:vertical;" placeholder="انسخي الأسماء من أي مصدر (Excel، Word، رسالة...) والصقيها هنا..."></textarea>
-          <button class="btn btn-sm btn-outline" id="btnParseText" style="margin-top:8px;">تحويل النص إلى قائمة</button>
+          <button class="btn btn-sm btn-outline" id="btnParseText" style="margin-top:8px;">إضافة الأسماء</button>
         </div>
 
         <div style="margin-top:16px;">
@@ -1323,10 +1369,27 @@ function viewScan(classId){
     <div class="scan-head glow">
       <h2>رصد غياب فصل ${esc(cls.name)}</h2><p>${esc(SCHOOL_NAME)} — ${todayStr()}</p>
       <div class="teacher-field">
-        <input id="teacherSelect" list="teacherNamesList" placeholder="اكتبي اسم المعلمة أو اختاري من القائمة" value="${esc(def)}" autocomplete="off">
-        <datalist id="teacherNamesList">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+        <select id="teacherSelectList">
+          <option value="">اختيار اسم المعلمة من القائمة</option>
+          ${names.map(n=>`<option value="${esc(n)}" ${n===def?'selected':''}>${esc(n)}</option>`).join('')}
+        </select>
+        <input id="teacherSelect" placeholder="أو اكتبي اسم المعلمة مباشرة" value="${esc(def)}" autocomplete="off" style="margin-top:8px;">
       </div>
-      <p style="font-size:.72rem;color:#cfe0e8;margin-top:6px;">يمكنك الكتابة مباشرة أو اختيار اسم من القائمة</p>
+      <p style="font-size:.72rem;color:#cfe0e8;margin-top:6px;">اختاري اسم المعلمة من القائمة أو اكتبيه مباشرة</p>
+    </div>
+    <div class="scan-class-card">
+      <div class="scan-class-main">
+        <div>
+          <div style="font-size:.72rem;color:#8299a6;font-weight:700;">الفصل المحدد للرصد</div>
+          <div class="scan-class-title">${esc(cls.name)}</div>
+        </div>
+        <div class="scan-class-number">${esc(cls.number||'—')}</div>
+      </div>
+      <div class="scan-class-meta">
+        <span>👩‍🎓 ${studentsOfClass(cls.id).length} طالبة</span>
+        <span>📅 ${todayStr()}</span>
+        <span>📌 رصد هذا الفصل</span>
+      </div>
     </div>
     ${students.length?`<div class="field" style="margin:16px 0 0;"><label>البحث باسم الطالبة</label><input id="studentSearchInput" placeholder="اكتبي جزءاً من اسم الطالبة للبحث..." autocomplete="off"></div>`:''}
     <div id="studentsList">${students.length?students.map(s=>`<div class="student-item" data-id="${s.id}" data-student-name="${esc(s.name.toLowerCase())}"><div class="s-info"><div class="s-num">${esc(s.number)}</div><div class="s-name">${esc(s.name)}</div></div><button class="absent-toggle" data-toggle="${s.id}"></button></div>`).join(''):'<div class="empty"><b>لا توجد طالبات في هذا الفصل بعد</b></div>'}</div>
