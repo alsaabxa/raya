@@ -257,10 +257,12 @@ a{color:inherit; text-decoration:none;}
 .scan-class-number{display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:42px;padding:0 12px;border-radius:12px;background:var(--navy);color:var(--gold);font-size:1.15rem;font-weight:800;}
 .scan-class-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
 .scan-class-meta span{background:var(--bg1);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:.72rem;font-weight:700;color:#5b7382;}
-.teacher-field{margin-top:16px; position:relative;}
+.teacher-field{margin-top:16px; position:relative; z-index:5;}
 .teacher-field input, .teacher-field select{
-  width:100%; padding:11px 14px; border-radius:10px; border:none; text-align:center; font-weight:700; color:var(--navy);
+  width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid rgba(255,255,255,.35); background:#fff; text-align:center; font-weight:700; color:var(--navy); position:relative; z-index:6; cursor:text;
 }
+.teacher-field select{cursor:pointer; appearance:auto;}
+.teacher-field input:focus, .teacher-field select:focus{outline:2px solid var(--gold); border-color:var(--gold);}
 .student-item{
   display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:14px; padding:14px 16px;
   margin-bottom:10px; box-shadow:0 3px 10px -4px rgba(16,42,67,.12); border:2px solid transparent; transition:.15s;
