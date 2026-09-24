@@ -413,6 +413,9 @@ a{color:inherit; text-decoration:none;}
 .student-report-head{padding:16px 18px;background:linear-gradient(135deg,#f0faf8,#f8fbfd);border-bottom:1px solid #dbe6ec;display:flex;align-items:center;justify-content:space-between;gap:12px}.student-report-head h3{margin:0;color:#102a43;font-size:1rem}.student-report-head span{font-size:.75rem;color:#64748b;font-weight:700}
 .student-report-table-wrap{overflow:auto}.student-report-table{width:100%;border-collapse:collapse;min-width:650px}.student-report-table th{background:#102a43;color:#fff;padding:11px 10px;font-size:.78rem;white-space:nowrap}.student-report-table td{padding:10px;border-bottom:1px solid #edf2f5;text-align:center;font-size:.78rem;color:#334e68}.student-report-table tr:nth-child(even){background:#f8fbfc}.student-report-table tr:hover{background:#eef8f6}.student-report-table .student-name-cell{text-align:right;font-weight:800;color:#102a43}.status-pill{display:inline-flex;min-width:34px;justify-content:center;padding:3px 9px;border-radius:999px;font-weight:800}.present-pill{background:#dcfce7;color:#166534}.absent-pill{background:#fee2e2;color:#b91c1c}
 @media print{.student-report-section{box-shadow:none;border:1px solid #dbe6ec;break-inside:avoid;page-break-inside:avoid}.student-report-head{background:#f0faf8!important}.student-report-table th{background:#102a43!important;color:#fff!important}.student-report-table tr:nth-child(even){background:#f8fbfc!important}.present-pill{background:#dcfce7!important;color:#166534!important}.absent-pill{background:#fee2e2!important;color:#b91c1c!important}}
+
+.student-profile-link{color:var(--navy);font-weight:800;text-decoration:underline;text-decoration-color:rgba(15,118,110,.55);text-underline-offset:3px;cursor:pointer}.student-profile-link:hover{color:var(--teal)}
+.student-profile-modal .student-profile-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}.student-profile-modal .student-profile-stat{background:var(--bg1);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}.student-profile-modal .student-profile-stat b{display:block;color:var(--navy);font-size:1.25rem}.student-profile-modal .student-profile-stat span{font-size:.7rem;color:#64748b;font-weight:700}.student-profile-history{border:1px solid var(--line);border-radius:12px;overflow:hidden}.student-profile-history-row{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid #edf2f5;font-size:.76rem}.student-profile-history-row:last-child{border-bottom:0}.student-profile-history-row .abs{color:var(--danger);font-weight:800}.student-profile-history-row .pres{color:var(--success);font-weight:800}@media(max-width:650px){.student-profile-modal .student-profile-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -1981,15 +1984,32 @@ function renderReportPreview(){
     
     
     <div class="class-summary-card"><div class="class-summary-head"><div><h3>📊 ملخص الفصول</h3><p>نظرة سريعة على الرصد والحضور والغياب ونسبة الحضور لكل فصل</p></div><div style="font-size:1.05rem;">💚 📚</div></div><div class="class-summary-wrap"><table class="class-summary-table"><thead><tr><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th><th>نسبة الحضور</th></tr></thead><tbody>${classRows||'<tr><td colspan="5" style="text-align:center;color:#8299a6;padding:20px;">لا توجد بيانات رصد في الفترة المحددة</td></tr>'}</tbody></table></div></div>
-    <div class="student-report-section"><div class="student-report-head"><h3>تفصيل الطالبات</h3><span>ملخص حضور وغياب الطالبات</span></div><div class="student-report-table-wrap"><table class="student-report-table"><thead><tr><th>#</th><th>اسم الطالبة</th><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th></tr></thead><tbody>${d.byStudent.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')).map((x,i)=>`<tr><td>${i+1}</td><td class="student-name-cell">${esc(x.name)}</td><td>${esc((store.classes.find(c=>c.id===x.classId)||{}).name||'')}</td><td>${x.days}</td><td><span class="status-pill present-pill">${x.present}</span></td><td><span class="status-pill absent-pill">${x.absent}</span></td></tr>`).join('')||'<tr><td colspan="6">لا توجد بيانات</td></tr>'}</tbody></table></div></div>
+    <div class="student-report-section"><div class="student-report-head"><h3>تفصيل الطالبات</h3><span>ملخص حضور وغياب الطالبات</span></div><div class="student-report-table-wrap"><table class="student-report-table"><thead><tr><th>#</th><th>اسم الطالبة</th><th>الفصل</th><th>أيام الرصد</th><th>حضور</th><th>غياب</th></tr></thead><tbody>${d.byStudent.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')).map((x,i)=>`<tr><td>${i+1}</td><td class="student-name-cell"><button type="button" class="student-profile-link" data-open-student-profile="${esc(x.studentId||"")}">${esc(x.name)}</button></td><td>${esc((store.classes.find(c=>c.id===x.classId)||{}).name||'')}</td><td>${x.days}</td><td><span class="status-pill present-pill">${x.present}</span></td><td><span class="status-pill absent-pill">${x.absent}</span></td></tr>`).join('')||'<tr><td colspan="6">لا توجد بيانات</td></tr>'}</tbody></table></div></div>
   </div>`;
 }
+function openStudentProfileById(studentId){
+  const st=store.students.find(s=>s.id===studentId);
+  if(!st){ toast('تعذّر العثور على بيانات الطالبة',true); return; }
+  const cls=store.classes.find(c=>c.id===st.classId);
+  const records=[];
+  (store.attendance||[]).filter(a=>a.classId===st.classId).forEach(a=>{
+    (a.records||[]).filter(r=>r.studentId===st.id).forEach(r=>records.push({date:a.date,status:r.status,teacher:a.teacher||'غير محددة',time:a.time||''}));
+  });
+  records.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const present=records.filter(r=>r.status==='حاضر').length, absent=records.filter(r=>r.status==='غائب').length;
+  const rate=records.length?Math.round(present/records.length*100):0;
+  const host=document.getElementById('modalHost')||(()=>{const d=document.createElement('div');d.id='modalHost';document.body.appendChild(d);return d;})();
+  host.innerHTML='<div class="overlay student-profile-modal" id="studentProfileOv"><div class="modal wide"><div class="modal-head"><h3>👩‍🎓 ملف الطالبة: '+esc(st.name)+'</h3><button class="modal-close" id="studentProfileClose">✕</button></div><div class="modal-body"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px"><b style="color:var(--navy)">الفصل: '+esc(cls?cls.name:'—')+'</b><span style="color:#64748b;font-size:.78rem">رقم الطالبة: '+esc(st.number||'—')+'</span></div><div class="student-profile-grid"><div class="student-profile-stat"><b>'+records.length+'</b><span>أيام الرصد</span></div><div class="student-profile-stat"><b>'+present+'</b><span>حضور</span></div><div class="student-profile-stat"><b style="color:var(--danger)">'+absent+'</b><span>غياب</span></div><div class="student-profile-stat"><b>'+rate+'%</b><span>نسبة الحضور</span></div></div><h4 style="color:var(--navy);margin:8px 0 10px">📅 سجل الحضور والغياب</h4><div class="student-profile-history">'+(records.map(r=>'<div class="student-profile-history-row"><span>'+esc(formatDateAr(r.date))+(r.time?' · '+esc(r.time):'')+' · '+esc(r.teacher)+'</span><span class="'+(r.status==='غائب'?'abs':'pres')+'">'+esc(r.status)+'</span></div>').join('')||'<div class="empty">لا يوجد سجل حضور أو غياب</div>')+'</div></div></div></div>';
+  const close=()=>host.innerHTML=''; document.getElementById('studentProfileClose').onclick=close; document.getElementById('studentProfileOv').onclick=e=>{if(e.target.id==='studentProfileOv')close();};
+}
+
 function bindReports(){
   ['reportType','reportDate','reportClass'].forEach(id=>document.getElementById(id).addEventListener('change',renderReportPreview));
   document.getElementById('refreshReport').onclick=renderReportPreview;
   document.getElementById('reportPdfBtn').onclick=exportPeriodPDF;
   document.getElementById('reportExcelBtn').onclick=exportPeriodExcel;
   renderReportPreview();
+  document.querySelectorAll('[data-open-student-profile]').forEach(b=>b.onclick=()=>openStudentProfileById(b.dataset.openStudentProfile));
 }
 function reportPrintHtml(type,anchor,classId){
   const d=reportData(type,anchor,classId);
