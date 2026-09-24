@@ -314,7 +314,7 @@ a{color:inherit; text-decoration:none;}
 .report-kpi .l{font-size:.78rem;color:#5b7382;font-weight:700}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
 .chart-card{background:#fff;border-radius:18px;box-shadow:var(--shadow);padding:18px;break-inside:avoid}
-.chart-card h3{font-size:1rem;color:var(--navy);margin-bottom:14px}
+.chart-card h3{font-size:1rem;color:var(--navy);margin-bottom:14px}.chart-grid{break-inside:avoid;page-break-inside:avoid}
 .chart-row{display:grid;grid-template-columns:minmax(100px,1fr) 3fr 46px;align-items:center;gap:8px;margin:10px 0}
 .chart-label{font-size:.76rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chart-track{height:16px;background:#edf2f5;border-radius:999px;overflow:hidden}
@@ -1320,9 +1320,12 @@ function viewScan(classId){
     <div class="scan-head glow">
       <h2>رصد غياب فصل ${esc(cls.name)}</h2>
       <p>${esc(SCHOOL_NAME)} — ${todayStr()}</p>
-      <div class="teacher-field" style="display:flex; gap:8px; align-items:stretch;">
-        <input id="teacherSelect" list="teacherNamesList" placeholder="اسم المعلمة (اختياري)" value="${esc(defaultTeacher)}" autocomplete="off" style="flex:1;">
-        <datalist id="teacherNamesList">${staffOptions}</datalist>
+      <div class="teacher-field" style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
+        <select id="teacherSelectList" style="flex:1;min-width:190px;">
+          <option value="">اختيار المعلمة من القائمة</option>
+          ${allTeacherNames.map(n=>`<option value="${esc(n)}" ${n===defaultTeacher?"selected":""}>${esc(n)}</option>`).join("")}
+        </select>
+        <input id="teacherSelect" placeholder="أو اكتبي اسم المعلمة" value="${esc(defaultTeacher)}" autocomplete="off" style="flex:1;min-width:190px;">
         <button type="button" id="addTeacherNameBtn" title="إضافة اسم معلمة جديد للقائمة" style="flex-shrink:0; width:42px; border-radius:10px; background:rgba(255,255,255,.16); color:#fff; font-weight:800; font-size:1.1rem;">+</button>
       </div>
       <p style="font-size:.72rem; color:#cfe0e8; margin-top:6px; position:relative;">اختياري — يمكنك اختيار اسمك من القائمة أو كتابته أو تركه فارغاً</p>
@@ -1412,6 +1415,9 @@ function bindScan(){
   list.addEventListener('click', ()=>{ if(barcodeInput && !isTouch) barcodeInput.focus(); });
   const finishBtn = document.getElementById('finishScan');
   if(finishBtn) finishBtn.onclick = submitScan;
+  const teacherInput = document.getElementById('teacherSelect');
+  const teacherList = document.getElementById('teacherSelectList');
+  if(teacherList && teacherInput){ teacherList.onchange=()=>teacherInput.value=teacherList.value; teacherInput.oninput=()=>{if(teacherList.value!==teacherInput.value) teacherList.value='';}; }
   const addNameBtn = document.getElementById('addTeacherNameBtn');
   if(addNameBtn) addNameBtn.onclick = addTeacherNameQuick;
   bindEditBtn();
@@ -1427,12 +1433,13 @@ async function addTeacherNameQuick(){
   }
   // نحدّث القائمة المنسدلة وحقل الإدخال مباشرة دون إعادة رسم الصفحة
   // حتى لا تُفقد حالة الطالبات المحددات كغائبات أثناء الرصد.
-  const list = document.getElementById('teacherNamesList');
+  const list = document.getElementById('teacherSelectList');
   if(list && !Array.from(list.options).some(o=>o.value===name)){
     const opt = document.createElement('option'); opt.value = name; list.appendChild(opt);
   }
   const input = document.getElementById('teacherSelect');
   if(input) input.value = name;
+  if(list) list.value = name;
   toast(`تمت إضافة "${name}" إلى قائمة المعلمات`);
 }
 function bindEditBtn(){
@@ -1707,7 +1714,7 @@ function viewManage(){
         <div id="manageStudentList" style="max-height:440px;overflow:auto;margin-top:14px">
           ${students.map((s,i)=>`<div class="list-row manage-student-row" data-student-row="${esc(s.id)}">
             <label style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer"><input type="checkbox" class="manage-student-check" value="${esc(s.id)}"><span class="info"><b>${esc(s.name)}</b><span>رقم ${esc(s.number||i+1)}</span></span></label>
-            <div class="row-actions"><button class="icon-btn" data-manage-student-edit="${esc(s.id)}">✎</button><button class="icon-btn del" data-manage-student-delete="${esc(s.id)}">🗑</button></div>
+            <div class="row-actions"><button class="icon-btn" data-manage-student-move="${esc(s.id)}" title="نقل الطالبة إلى فصل آخر">↔</button><button class="icon-btn" data-manage-student-edit="${esc(s.id)}">✎</button><button class="icon-btn del" data-manage-student-delete="${esc(s.id)}">🗑</button></div>
           </div>`).join('') || '<div class="empty"><b>لا توجد طالبات في هذا الفصل</b></div>'}
         </div>
         ` : '<div class="empty"><b>اختاري فصلاً</b><p>أضيفي فصلاً أولاً للبدء.</p></div>'}
@@ -1722,6 +1729,7 @@ function bindManage(){
   document.querySelectorAll('[data-manage-delete]').forEach(b=>b.onclick=()=>deleteClass(b.dataset.manageDelete));
   const search=document.getElementById('manageStudentSearch');
   if(search) search.oninput=()=>document.querySelectorAll('.manage-student-row').forEach(r=>r.style.display=(r.textContent.toLowerCase().includes(search.value.trim().toLowerCase())?'':'none'));
+  document.querySelectorAll('[data-manage-student-move]').forEach(b=>b.onclick=()=>openStudentFormModal(route.manageClassId,store.students.find(s=>s.id===b.dataset.manageStudentMove),()=>render()));
   document.querySelectorAll('[data-manage-student-edit]').forEach(b=>b.onclick=()=>openStudentFormModal(route.manageClassId,store.students.find(s=>s.id===b.dataset.manageStudentEdit),()=>render()));
   document.querySelectorAll('[data-manage-student-delete]').forEach(b=>b.onclick=async()=>{
     if(!confirm('حذف هذه الطالبة؟'))return;
@@ -1864,7 +1872,7 @@ function renderReportPreview(){
     <div class="report-kpi"><div class="v">${totalAbsent}</div><div class="l">حالات الغياب</div></div>
     <div class="report-kpi"><div class="v">${attendancePct}%</div><div class="l">نسبة الحضور</div></div>
   </div>
-  <div class="chart-grid"><div class="chart-card"><h3>📊 الغياب حسب الفصول</h3>${classChart}</div><div class="chart-card"><h3>👩‍🎓 أعلى الطالبات في عدد الغياب</h3>${studentChart}</div></div>
+  <div class="chart-grid"><div class="chart-card"><h3>📊 لوحة الفصول — الغياب</h3>${classChart}</div><div class="chart-card"><h3>👩‍🎓 لوحة الفصول — أعلى الغياب</h3>${studentChart}</div></div>
   <div class="card" style="padding:22px;">
     <div style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #102a43;padding-bottom:14px;margin-bottom:16px;"><img src="school-logo.svg" alt="شعار المدرسة" style="width:72px;height:72px;object-fit:contain;"><div><h2 style="margin:0;color:#102a43;">${esc(SCHOOL_NAME)}</h2><div style="font-weight:800;margin-top:5px;">تقرير غياب ${d.label}</div><div style="color:#64748b;font-size:13px;">من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div></div></div>
     <div class="two-col" style="margin-bottom:16px;"><div class="stat-card"><b>${sessions}</b><span>أيام رصد</span></div><div class="stat-card"><b>${totalPresent}</b><span>حالات حضور</span></div><div class="stat-card"><b>${totalAbsent}</b><span>حالات غياب</span></div></div>
