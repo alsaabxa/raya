@@ -1320,7 +1320,10 @@ function openStudentFormModal(classId, existing, onDone){
    صفحة الرصد
    ========================================================================== */
 function viewScan(classId){
-  const cls = store.classes.find(c=>c.id===classId);
+  let cls = store.classes.find(c=>c.id===classId);
+  if(!cls && route.classNumber) cls = store.classes.find(c=>String(c.number||'')===String(route.classNumber));
+  if(!cls && route.className) cls = store.classes.find(c=>String(c.name||'').trim()===String(route.className).trim());
+  if(cls && cls.id!==classId) route.classId = cls.id;
   if(!cls){
     return `<div class="scan-wrap"><div class="empty"><b>لم يتم العثور على هذا الفصل</b>تأكدي من رابط كود QR${session? `<div style="margin-top:14px;"><button class="btn btn-primary" onclick="navigate('dashboard')">العودة للوحة التحكم</button></div>`:''}</div></div>`;
   }
@@ -1510,7 +1513,9 @@ function viewQR(){
 }
 function classScanUrl(classId){
   const url = new URL(window.location.href);
-  url.search = '?class=' + encodeURIComponent(classId);
+  const cls = store.classes.find(c=>c.id===classId);
+  url.search = '?class=' + encodeURIComponent(classId)
+    + (cls ? '&number=' + encodeURIComponent(cls.number||'') + '&name=' + encodeURIComponent(cls.name||'') : '');
   url.hash = '';
   return url.toString();
 }
@@ -1845,9 +1850,18 @@ function exportClassPDF(classId){
 function init(){
   const params = new URLSearchParams(window.location.search);
   const cid = params.get('class');
+  const cnum = params.get('number');
+  const cname = params.get('name');
   if(cid){
-    route = { name:'scanDeep', classId:cid };
-    pullFromServer(false).finally(render);
+    route = { name:'scanDeep', classId:cid, classNumber:cnum||'', className:cname||'' };
+    // نجلب البيانات أولاً، ثم نطابق الفصل بالمعرّف، وإن اختلف المعرّف نستخدم رقم الفصل/اسمه كخطة بديلة.
+    pullFromServer(false).finally(()=>{
+      let cls = store.classes.find(c=>c.id===route.classId);
+      if(!cls && route.classNumber) cls = store.classes.find(c=>String(c.number||'')===String(route.classNumber));
+      if(!cls && route.className) cls = store.classes.find(c=>String(c.name||'').trim()===String(route.className).trim());
+      if(cls) route.classId = cls.id;
+      render();
+    });
   }else{
     if(session) startAutoSync();
     render();
