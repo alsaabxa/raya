@@ -344,6 +344,10 @@ a{color:inherit; text-decoration:none;}
   .topbar, .no-print{display:none !important;}
   body{background:#fff;}
 }
+
+@media print{
+.pdf-cover{page-break-after:always;min-height:95vh;padding:30px 20px;text-align:center}.pdf-cover h1{font-size:30px;color:#102a43;margin:24px 0 8px}.pdf-school{font-size:22px;font-weight:800;color:#0f766e}.pdf-period{font-size:16px;color:#64748b;margin-bottom:28px}.pdf-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}.pdf-summary div{border:2px solid #dbe6ec;border-radius:14px;padding:18px}.pdf-summary b{display:block;font-size:28px;color:#102a43}.pdf-summary span{font-weight:700}.pdf-students-table{width:100%;border-collapse:collapse;font-size:13px}.pdf-students-table th{background:#102a43!important;color:#fff!important;padding:10px}.pdf-students-table td{border:1px solid #dbe6ec;padding:8px}.pdf-charts-page{page-break-before:always}.report-dashboard{margin-top:0}
+}
 </style>
 </head>
 <body>
@@ -1303,52 +1307,27 @@ function openStudentFormModal(classId, existing, onDone){
    ========================================================================== */
 function viewScan(classId){
   const cls = store.classes.find(c=>c.id===classId);
-  if(!cls){
-    return `<div class="scan-wrap"><div class="empty"><b>لم يتم العثور على هذا الفصل</b>تأكدي من رابط كود QR${session? `<div style="margin-top:14px;"><button class="btn btn-primary" onclick="navigate('dashboard')">العودة للوحة التحكم</button></div>`:''}</div></div>`;
-  }
-  const existing = attendanceOf(cls.id);
-  if(existing && !route.editing){
-    return viewScanConfirm(cls, existing);
-  }
-  const students = studentsOfClass(cls.id).sort(byNumber);
-  const allTeacherNames = [...new Set([...store.staff.map(s=>s.name), ...(store.teacherNames||[])])].filter(Boolean);
-  const staffOptions = allTeacherNames.map(n=>`<option value="${esc(n)}"></option>`).join('');
-  const defaultTeacher = session && session.type==='staff' ? session.name : (existing? existing.teacher : '');
-  return `
-  <div class="scan-wrap">
-    ${session ? `<button class="btn btn-outline" style="margin-bottom:14px;" onclick="navigate('dashboard')">→ العودة للوحة التحكم</button>` : ''}
+  if(!cls) return '<div class="scan-wrap"><div class="empty"><b>لم يتم العثور على هذا الفصل</b></div></div>';
+  const existing=attendanceOf(cls.id);
+  if(existing && !route.editing) return viewScanConfirm(cls,existing);
+  const students=studentsOfClass(cls.id).sort(byNumber);
+  const names=[...new Set([...store.staff.map(s=>s.name),...(store.teacherNames||[])])].filter(Boolean);
+  const def=session&&session.type==='staff'?session.name:(existing?existing.teacher:'');
+  return `<div class="scan-wrap">
+    ${session?'<button class="btn btn-outline" style="margin-bottom:14px;" onclick="navigate(\'dashboard\')">→ العودة للوحة التحكم</button>':''}
     <div class="scan-head glow">
-      <h2>رصد غياب فصل ${esc(cls.name)}</h2>
-      <p>${esc(SCHOOL_NAME)} — ${todayStr()}</p>
-      <div class="teacher-field" style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
-        <select id="teacherSelectList" style="flex:1;min-width:190px;">
-          <option value="">اختيار المعلمة من القائمة</option>
-          ${allTeacherNames.map(n=>`<option value="${esc(n)}" ${n===defaultTeacher?"selected":""}>${esc(n)}</option>`).join("")}
-        </select>
-        <input id="teacherSelect" placeholder="أو اكتبي اسم المعلمة" value="${esc(defaultTeacher)}" autocomplete="off" style="flex:1;min-width:190px;">
-        <button type="button" id="addTeacherNameBtn" title="إضافة اسم معلمة جديد للقائمة" style="flex-shrink:0; width:42px; border-radius:10px; background:rgba(255,255,255,.16); color:#fff; font-weight:800; font-size:1.1rem;">+</button>
+      <h2>رصد غياب فصل ${esc(cls.name)}</h2><p>${esc(SCHOOL_NAME)} — ${todayStr()}</p>
+      <div class="teacher-field">
+        <input id="teacherSelect" list="teacherNamesList" placeholder="اكتبي اسم المعلمة أو اختاري من القائمة" value="${esc(def)}" autocomplete="off">
+        <datalist id="teacherNamesList">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
       </div>
-      <p style="font-size:.72rem; color:#cfe0e8; margin-top:6px; position:relative;">اختياري — يمكنك اختيار اسمك من القائمة أو كتابته أو تركه فارغاً</p>
+      <p style="font-size:.72rem;color:#cfe0e8;margin-top:6px;">يمكنك الكتابة مباشرة أو اختيار اسم من القائمة</p>
     </div>
-    ${students.length ? `
-    <div class="field" style="margin:16px 0 0;">
-      <label style="font-weight:800; color:var(--navy);">مسح الباركود / رقم الطالبة</label>
-      <input id="barcodeInput" placeholder="امسحي الباركود هنا أو اكتبي رقم الطالبة واضغطي Enter..." autocomplete="off" style="text-align:center; font-weight:700;">
-    </div>` : ''}
-    <div id="studentsList">
-      ${students.length ? students.map(s=>`
-        <div class="student-item" data-id="${s.id}">
-          <div class="s-info"><div class="s-num">${esc(s.number)}</div><div class="s-name">${esc(s.name)}</div></div>
-          <button class="absent-toggle" data-toggle="${s.id}"></button>
-        </div>`).join('') : `<div class="empty"><b>لا توجد طالبات في هذا الفصل بعد</b></div>`}
-    </div>
-    ${students.length ? `
-    <div class="scan-submit-bar">
-      <button class="btn btn-primary" id="finishScan">✅ إنهاء الرصد</button>
-    </div>` : ''}
+    ${students.length?`<div class="field" style="margin:16px 0 0;"><label>البحث باسم الطالبة</label><input id="studentSearchInput" placeholder="اكتبي جزءاً من اسم الطالبة للبحث..." autocomplete="off"></div>`:''}
+    <div id="studentsList">${students.length?students.map(s=>`<div class="student-item" data-id="${s.id}" data-student-name="${esc(s.name.toLowerCase())}"><div class="s-info"><div class="s-num">${esc(s.number)}</div><div class="s-name">${esc(s.name)}</div></div><button class="absent-toggle" data-toggle="${s.id}"></button></div>`).join(''):'<div class="empty"><b>لا توجد طالبات في هذا الفصل بعد</b></div>'}</div>
+    ${students.length?'<div class="scan-submit-bar"><button class="btn btn-primary" id="finishScan">✅ إنهاء الرصد</button></div>':''}
   </div>`;
 }
-
 function viewScanConfirm(cls, att){
   const absentees = att.records.filter(r=>r.status==='غائب');
   const present = att.records.length - absentees.length;
@@ -1391,28 +1370,16 @@ function bindScan(){
     if(!btn) return;
     toggleStudentAbsent(btn.dataset.toggle);
   });
-  const barcodeInput = document.getElementById('barcodeInput');
-  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  if(barcodeInput){
-    barcodeInput.addEventListener('keydown', (e)=>{
-      if(e.key !== 'Enter' && e.keyCode !== 13) return;
-      e.preventDefault();
-      const code = numStr(barcodeInput.value);
-      barcodeInput.value = '';
-      if(!code) return;
-      const students = studentsOfClass(route.classId);
-      const match = students.find(s => sameCode(s.number, code) || s.id === code);
-      if(match){
-        toggleStudentAbsent(match.id);
-        toast(scanAbsentSet.has(match.id) ? `تم تحديد "${match.name}" غائبة` : `تم تحديد "${match.name}" حاضرة`);
-      }else{
-        toast('لم يتم العثور على طالبة بهذا الرقم', true);
-      }
-      barcodeInput.focus();
+  const searchInput=document.getElementById('studentSearchInput');
+  if(searchInput){
+    searchInput.addEventListener('input',()=>{
+      const q=searchInput.value.trim().toLowerCase();
+      document.querySelectorAll('#studentsList .student-item').forEach(item=>{
+        const name=(item.dataset.studentName||'').toLowerCase();
+        item.style.display=!q||name.includes(q)?'':'none';
+      });
     });
-    if(!isTouch) barcodeInput.focus();
   }
-  list.addEventListener('click', ()=>{ if(barcodeInput && !isTouch) barcodeInput.focus(); });
   const finishBtn = document.getElementById('finishScan');
   if(finishBtn) finishBtn.onclick = submitScan;
   const teacherInput = document.getElementById('teacherSelect');
@@ -1896,7 +1863,18 @@ function reportPrintHtml(type,anchor,classId){
 }
 function exportPeriodPDF(){
   renderReportPreview();
-  setTimeout(()=>window.print(),120);
+  setTimeout(()=>{
+    const p=document.getElementById('reportPreview');
+    const original=p.innerHTML;
+    const type=document.getElementById('reportType').value, anchor=document.getElementById('reportDate').value||todayStr(), classId=document.getElementById('reportClass').value;
+    const d=reportData(type,anchor,classId);
+    const totalP=d.byClass.reduce((n,x)=>n+x.present,0), totalA=d.byClass.reduce((n,x)=>n+x.absent,0);
+    const students=d.byStudent.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+    const rows=students.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc((store.classes.find(c=>c.id===x.classId)||{}).name||'')}</td><td>${x.present}</td><td style="color:#dc2626;font-weight:800">${x.absent}</td></tr>`).join('')||'<tr><td colspan="4">لا توجد بيانات</td></tr>';
+    p.innerHTML=`<div class="pdf-cover"><div class="pdf-school">${esc(SCHOOL_NAME)}</div><h1>تقرير الحضور والغياب</h1><div class="pdf-period">تقرير ${d.label} — من ${formatDateAr(d.from)} إلى ${formatDateAr(d.to)}</div><div class="pdf-summary"><div><b>${students.length}</b><span>عدد الطالبات</span></div><div><b>${totalP}</b><span>حضور</span></div><div><b>${totalA}</b><span>غياب</span></div></div><h2>أسماء الطالبات وملخص الحضور والغياب</h2><table class="pdf-students-table"><thead><tr><th>اسم الطالبة</th><th>الفصل</th><th>الحضور</th><th>الغياب</th></tr></thead><tbody>${rows}</tbody></table></div><div class="pdf-charts-page">${original}</div>`;
+    window.print();
+    setTimeout(()=>{p.innerHTML=original;},500);
+  },120);
 }
 function exportPeriodExcel(){
   const type=document.getElementById('reportType').value, anchor=document.getElementById('reportDate').value||todayStr(), classId=document.getElementById('reportClass').value, d=reportData(type,anchor,classId);
