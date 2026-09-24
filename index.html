@@ -735,11 +735,6 @@ function bindClassCardEvents(){
       document.getElementById('menu-'+btn.dataset.menu).classList.toggle('open');
     };
   });
-  document.addEventListener('click', (e)=>{
-    if(e.target.closest('[data-menu]') || e.target.closest('.cc-menu-list')) return;
-    document.querySelectorAll('.cc-menu-list').forEach(m=>m.classList.remove('open'));
-  });
-
   document.querySelectorAll('[data-edit-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); const cls=store.classes.find(c=>c.id===b.dataset.editClass); if(cls) openClassModal(cls); });
   document.querySelectorAll('[data-del-class]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); deleteClass(b.dataset.delClass); });
   document.querySelectorAll('[data-manage-students]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openStudentsModal(b.dataset.manageStudents); });
@@ -914,15 +909,15 @@ function openClassModal(existing){
       if(!unique.length){ toast('لا توجد أسماء جديدة لإضافتها', true); return; }
       const current = studentsOfClass(existing.id);
       const start = current.length + 1;
-      for(let i=0;i<unique.length;i++){
-        const st = {id:uid(), classId:existing.id, number:String(start+i), name:unique[i]};
-        store.students.push(st);
-        await pushToServer('saveStudent', st);
-      }
+      const added = unique.map((name,i)=>({id:uid(), classId:existing.id, number:String(start+i), name}));
+      store.students.push(...added);
       saveStore();
       drawEditStudents(document.getElementById('editSearchS').value.trim());
       renderTopnav();
-      toast(`تمت إضافة ${unique.length} طالبة للفصل`);
+      toast(`تمت إضافة ${added.length} طالبة فوراً`);
+      Promise.all(added.map(st=>pushToServer('saveStudent', st))).then(results=>{
+        if(results.some(r=>r && r.ok)) toast('تمت مزامنة الأسماء مع الخادم');
+      });
     };
 
     const editDz = document.getElementById('editDz');
@@ -938,7 +933,12 @@ function openClassModal(existing){
           const wb=XLSX.read(bin,{type:'array'});
           const ws=wb.Sheets[wb.SheetNames[0]];
           const rows=XLSX.utils.sheet_to_json(ws,{header:1});
-          names=rows.filter(r=>r.length&&r[0]!=='').map(r=>String(r.length>=2?r[1]:r[0]).trim()).filter(Boolean);
+          names=rows.map(r=>{
+            const cells=Array.isArray(r)?r.map(v=>String(v??'').trim()).filter(Boolean):[];
+            if(!cells.length) return '';
+            const arabic=cells.find(v=>/[ء-يأ-ئؤإآ]/.test(v)&&v.length>=3);
+            return (arabic||cells[0]||'').trim();
+          }).filter(Boolean);
         }else if(ext==='pdf'){
           if(!window.pdfjsLib) throw new Error('pdfjs missing');
           const buf=await file.arrayBuffer(), pdf=await pdfjsLib.getDocument({data:buf}).promise, lines=[];
@@ -962,6 +962,7 @@ function openClassModal(existing){
         }else{
           names=cleanNameLines((await file.text()).split(/\r?\n/));
         }
+        if(!names.length) throw new Error('no names');
         await addImportedToExistingClass(names);
       }catch(err){ toast('تعذّرت قراءة الملف — تأكدي من صيغته',true); }
       finally{ editDzStatus.textContent=''; if(editFileInput) editFileInput.value=''; }
@@ -970,7 +971,8 @@ function openClassModal(existing){
     editFileInput.onchange=e=>{if(e.target.files[0]) readImportedFile(e.target.files[0]);};
     editDz.addEventListener('dragover',e=>{e.preventDefault(); editDz.classList.add('drag');});
     editDz.addEventListener('dragleave',()=>editDz.classList.remove('drag'));
-    editDz.addEventListener('drop',e=>{e.preventDefault();editDz.classList.remove('drag');if(e.dataTransfer.files[0])readImportedFile(e.dataTransfer.files[0]);});
+    editDz.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();editDz.classList.remove('drag');const file=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(file)readImportedFile(file);});
+    editDz.addEventListener('dragenter',e=>{e.preventDefault();e.stopPropagation();editDz.classList.add('drag');});
     editDz.addEventListener('paste',e=>{
       const text=(e.clipboardData||window.clipboardData).getData('text');
       if(text&&text.trim()){e.preventDefault();addImportedToExistingClass(cleanNameLines(text.split(/\r?\n/)));}
@@ -1020,9 +1022,11 @@ function openClassModal(existing){
     dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
     dz.addEventListener('dragleave', ()=> dz.classList.remove('drag'));
     dz.addEventListener('drop', e=>{
-      e.preventDefault(); dz.classList.remove('drag');
-      if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+      e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag');
+      const file=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+      if(file) handleFile(file);
     });
+    dz.addEventListener('dragenter',e=>{e.preventDefault();e.stopPropagation();dz.classList.add('drag');});
     document.getElementById('fileInput').onchange = (e)=>{ if(e.target.files[0]) handleFile(e.target.files[0]); };
 
     // لصق مباشر (Ctrl+V) داخل مربع السحب والإفلات نفسه
@@ -1108,8 +1112,12 @@ function openClassModal(existing){
     if(!name){ toast('يرجى إدخال اسم الفصل', true); return; }
     if(existing){
       existing.number = number; existing.name = name;
-      saveStore(); await pushToServer('saveClass', existing);
-      toast('تم تحديث الفصل');
+      saveStore();
+      close(); render();
+      toast('تم تحديث الفصل محلياً');
+      pushToServer('saveClass', existing).then(r=>{
+        if(r && r.ok) toast('تم حفظ تعديل الفصل في الخادم');
+      });
     }else{
       const classId = uid();
       const classObj = { id: classId, number: number || name, name };
@@ -1117,10 +1125,12 @@ function openClassModal(existing){
       store.classes.push(classObj);
       store.students.push(...newStudents);
       saveStore();
-      await pushToServer('saveClassWithStudents', { classObj, students: newStudents });
-      toast('تم حفظ الفصل والطالبات بنجاح');
+      close(); render();
+      toast('تم حفظ الفصل والطالبات محلياً');
+      pushToServer('saveClassWithStudents', { classObj, students: newStudents }).then(r=>{
+        if(r && r.ok) toast('تمت مزامنة الفصل مع الخادم');
+      });
     }
-    close(); render();
   };
 }
 
@@ -1204,15 +1214,19 @@ function openStudentFormModal(classId, existing, onDone){
     if(!name){ toast('أدخلي اسم الطالبة', true); return; }
     if(existing){
       existing.name=name; existing.number=number; existing.classId=clsId;
-      saveStore(); await pushToServer('saveStudent', existing);
-      toast('تم تحديث بيانات الطالبة');
+      saveStore();
+      close(); onDone && onDone(); renderTopnav();
+      toast('تم تحديث بيانات الطالبة فوراً');
+      pushToServer('saveStudent', existing).then(r=>{ if(r && r.ok) toast('تمت مزامنة التعديل'); });
+      return;
     }else{
       const st = { id: uid(), classId: clsId, number, name };
       store.students.push(st); saveStore();
-      await pushToServer('saveStudent', st);
-      toast('تمت إضافة الطالبة');
+      close(); onDone && onDone(); renderTopnav();
+      toast('تمت إضافة الطالبة فوراً');
+      pushToServer('saveStudent', st).then(r=>{ if(r && r.ok) toast('تمت مزامنة الطالبة'); });
+      return;
     }
-    close(); onDone && onDone(); renderTopnav();
   };
 }
 
