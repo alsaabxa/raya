@@ -1213,8 +1213,20 @@ function openClassModal(existing){
       saveStore();
       close(); render();
       toast('تم حفظ الفصل والطالبات محلياً');
-      pushToServer('saveClassWithStudents', { classObj, students: newStudents }).then(r=>{
-        if(r && r.ok) toast('تمت مزامنة الفصل مع الخادم');
+      // نرسل الفصل أولاً إلى ورقة Classes بشكل مستقل، ثم نرسل الطالبات.
+      // هذا يضمن أن الشيت يتعرف على رقم الفصل واسمه قبل ربط الطالبات به.
+      pushToServer('saveClass', classObj).then(async r=>{
+        if(!r || !r.ok){
+          toast('تعذرت مزامنة الفصل مع الشيت — تأكدي من نشر Google Apps Script', true);
+          return;
+        }
+        if(newStudents.length){
+          const results = await Promise.all(newStudents.map(s=>pushToServer('saveStudent', s)));
+          const failed = results.some(x=>!x || !x.ok);
+          toast(failed ? 'تم حفظ الفصل، لكن تعذرت مزامنة بعض الطالبات' : 'تمت مزامنة الفصل ورقم الفصل والطالبات مع الشيت', failed);
+        }else{
+          toast('تمت مزامنة اسم الفصل ورقم الفصل مع الشيت');
+        }
       });
     }
   };
