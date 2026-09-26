@@ -41,6 +41,15 @@ button{cursor:pointer; border:none; background:none;}
 a{color:inherit; text-decoration:none;}
 ::selection{background:var(--gold); color:var(--navy);}
 
+
+/* ---------- Dual calendar display: Hijri first, Gregorian below ---------- */
+.dual-date{display:inline-flex;flex-direction:column;align-items:center;gap:1px;line-height:1.35;vertical-align:middle;}
+.dual-hijri{font-weight:800;color:inherit;}
+.dual-greg{font-size:.72em;font-weight:600;color:#64748b;}
+.scan-head .dual-greg{color:#cfe0e8;}
+.notify-head .dual-date{font-size:.9em;}
+@media print{.dual-greg{color:#64748b !important;}}
+
 /* ---------- Header ---------- */
 .topbar{
   background:var(--navy);
@@ -812,7 +821,7 @@ function notificationBellHtml(){
   return `<div class="notify-wrap" id="notifyWrap">
     <button class="notify-btn" id="notifyBtn" title="التنبيهات" aria-label="التنبيهات">🔔${count?`<span class="notify-badge">${count>99?'99+':count}</span>`:''}</button>
     <div class="notify-panel" id="notifyPanel">
-      <div class="notify-head"><span>التنبيهات</span><span style="font-size:.72rem;color:#8299a6;">اليوم ${todayStr()}</span></div>
+      <div class="notify-head"><span>التنبيهات</span><span style="font-size:.72rem;color:#8299a6;">اليوم ${todayDateHtml()}</span></div>
       ${items.length?items.map(x=>`<div class="notify-item">🔔 <b>${esc(x.text)}</b></div>`).join(''):'<div class="notify-empty">لا توجد تنبيهات حالياً</div>'}
     </div>
   </div>`;
@@ -1053,7 +1062,7 @@ function openAbsentModal(classId){
   host.innerHTML = `
   <div class="overlay" id="ov">
     <div class="modal">
-      <div class="modal-head"><h3>غائبات فصل ${esc(cls.name)} — ${todayStr()}</h3><button class="modal-close" id="cl">✕</button></div>
+      <div class="modal-head"><h3>غائبات فصل ${esc(cls.name)} — ${todayDateHtml()}</h3><button class="modal-close" id="cl">✕</button></div>
       <div class="modal-body">
         ${absentees.length ? absentees.map(a=>`<div class="list-row"><div class="info"><b>${esc(a.studentName)}</b></div><span style="color:var(--danger); font-weight:700; font-size:.8rem;">غائبة</span></div>`).join('') : `<div class="empty"><b>لا يوجد غياب مسجّل اليوم</b></div>`}
       </div>
@@ -1525,7 +1534,7 @@ function viewScan(classId){
   return `<div class="scan-wrap">
     ${session?'<button class="btn btn-outline" style="margin-bottom:14px;" onclick="navigate(\'dashboard\')">→ العودة للوحة التحكم</button>':''}
     <div class="scan-head glow">
-      <h2>رصد غياب فصل ${esc(cls.name)}</h2><p>${esc(SCHOOL_NAME)} — ${todayStr()}</p>
+      <h2>رصد غياب فصل ${esc(cls.name)}</h2><p>${esc(SCHOOL_NAME)} — ${todayDateHtml()}</p>
       <div class="teacher-field">
         <select id="teacherSelectList">
           <option value="">اختيار اسم المعلمة من القائمة</option>
@@ -1545,7 +1554,7 @@ function viewScan(classId){
       </div>
       <div class="scan-class-meta">
         <span>👩‍🎓 ${studentsOfClass(cls.id).length} طالبة</span>
-        <span>📅 ${todayStr()}</span>
+        <span>📅 ${todayDateHtml()}</span>
         <span>📌 رصد هذا الفصل</span>
       </div>
     </div>
@@ -2032,10 +2041,18 @@ function reportRange(type, startValue){
   return {start:start, end:monthEnd, label:'شهري'};
 }
 function dateKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function formatDateAr(key){
+function formatDateArText(key){
   const d=new Date(key+'T00:00:00');
   return d.toLocaleDateString('ar-SA-u-nu-latn',{year:'numeric',month:'2-digit',day:'2-digit'});
 }
+function formatDateAr(key){
+  const d=new Date(key+'T00:00:00');
+  let hijri='—', greg='—';
+  try{ hijri=new Intl.DateTimeFormat('ar-SA-u-ca-islamic-nu-latn',{day:'numeric',month:'long',year:'numeric'}).format(d)+' هـ'; }catch(e){}
+  try{ greg=new Intl.DateTimeFormat('ar-SA-u-nu-latn',{day:'numeric',month:'long',year:'numeric'}).format(d)+' م'; }catch(e){}
+  return '<span class="dual-date"><span class="dual-hijri">'+esc(hijri)+'</span><span class="dual-greg">'+esc(greg)+'</span></span>';
+}
+function todayDateHtml(){ return formatDateAr(todayStr()); }
 function reportTeacherStats(sessions){
   const map={};
   sessions.forEach(a=>{
@@ -2143,7 +2160,7 @@ function openStudentProfileById(studentId){
   const present=records.filter(r=>r.status==='حاضر').length, absent=records.filter(r=>r.status==='غائب').length;
   const rate=records.length?Math.round(present/records.length*100):0;
   const host=document.getElementById('modalHost')||(()=>{const d=document.createElement('div');d.id='modalHost';document.body.appendChild(d);return d;})();
-  host.innerHTML='<div class="overlay student-profile-modal" id="studentProfileOv"><div class="modal wide"><div class="modal-head"><h3>👩‍🎓 ملف الطالبة: '+esc(st.name)+'</h3><button class="modal-close" id="studentProfileClose">✕</button></div><div class="modal-body"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px"><b style="color:var(--navy)">الفصل: '+esc(cls?cls.name:'—')+'</b><span style="color:#64748b;font-size:.78rem">رقم الطالبة: '+esc(st.number||'—')+'</span></div><div class="student-profile-grid"><div class="student-profile-stat"><b>'+records.length+'</b><span>أيام الرصد</span></div><div class="student-profile-stat"><b>'+present+'</b><span>حضور</span></div><div class="student-profile-stat"><b style="color:var(--danger)">'+absent+'</b><span>غياب</span></div><div class="student-profile-stat"><b>'+rate+'%</b><span>نسبة الحضور</span></div></div><h4 style="color:var(--navy);margin:8px 0 10px">📅 سجل الحضور والغياب</h4><div class="student-profile-history">'+(records.map(r=>'<div class="student-profile-history-row"><span>'+esc(formatDateAr(r.date))+(r.time?' · '+esc(r.time):'')+' · '+esc(r.teacher)+'</span><span class="'+(r.status==='غائب'?'abs':'pres')+'">'+esc(r.status)+'</span></div>').join('')||'<div class="empty">لا يوجد سجل حضور أو غياب</div>')+'</div></div></div></div>';
+  host.innerHTML='<div class="overlay student-profile-modal" id="studentProfileOv"><div class="modal wide"><div class="modal-head"><h3>👩‍🎓 ملف الطالبة: '+esc(st.name)+'</h3><button class="modal-close" id="studentProfileClose">✕</button></div><div class="modal-body"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px"><b style="color:var(--navy)">الفصل: '+esc(cls?cls.name:'—')+'</b><span style="color:#64748b;font-size:.78rem">رقم الطالبة: '+esc(st.number||'—')+'</span></div><div class="student-profile-grid"><div class="student-profile-stat"><b>'+records.length+'</b><span>أيام الرصد</span></div><div class="student-profile-stat"><b>'+present+'</b><span>حضور</span></div><div class="student-profile-stat"><b style="color:var(--danger)">'+absent+'</b><span>غياب</span></div><div class="student-profile-stat"><b>'+rate+'%</b><span>نسبة الحضور</span></div></div><h4 style="color:var(--navy);margin:8px 0 10px">📅 سجل الحضور والغياب</h4><div class="student-profile-history">'+(records.map(r=>'<div class="student-profile-history-row"><span>'+formatDateAr(r.date)+(r.time?' · '+esc(r.time):'')+' · '+esc(r.teacher)+'</span><span class="'+(r.status==='غائب'?'abs':'pres')+'">'+esc(r.status)+'</span></div>').join('')||'<div class="empty">لا يوجد سجل حضور أو غياب</div>')+'</div></div></div></div>';
   const close=()=>host.innerHTML=''; document.getElementById('studentProfileClose').onclick=close; document.getElementById('studentProfileOv').onclick=e=>{if(e.target.id==='studentProfileOv')close();};
 }
 
@@ -2227,7 +2244,7 @@ function exportClassPDF(classId){
   const html = `
   <div style="font-family:'Cairo',sans-serif; direction:rtl; padding:10px;">
     <h2 style="color:#102a43;">تقرير غياب — ${esc(cls.name)}</h2>
-    <p style="color:#555; font-size:13px;">${esc(SCHOOL_NAME)} — التاريخ: ${todayStr()} ${att? '— المعلمة: '+esc(att.teacher)+' — الساعة: '+esc(att.time):''}</p>
+    <p style="color:#555; font-size:13px;">${esc(SCHOOL_NAME)} — التاريخ: ${todayDateHtml()} ${att? '— المعلمة: '+esc(att.teacher)+' — الساعة: '+esc(att.time):''}</p>
     <table style="width:100%; border-collapse:collapse; margin-top:14px;" border="1" cellpadding="8">
       <thead style="background:#102a43; color:#fff;"><tr><th>رقم الطالبة</th><th>اسم الطالبة</th><th>الحالة</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
