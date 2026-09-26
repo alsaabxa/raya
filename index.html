@@ -1711,58 +1711,63 @@ function bindQR(){
   document.querySelectorAll('[data-copy]').forEach(b=> b.onclick = ()=>{
     navigator.clipboard.writeText(classScanUrl(b.dataset.copy)).then(()=> toast('تم نسخ الرابط')).catch(()=> toast('تعذّر النسخ', true));
   });
-  document.querySelectorAll('[data-print]').forEach(b=> b.onclick = ()=>{
-    printElement(document.getElementById('qrcard-'+b.dataset.print).outerHTML, 'كود ' + b.dataset.print);
-  });
-  document.getElementById('printAll').onclick = ()=>{
-    printElement(document.getElementById('qrGrid').outerHTML, 'أكواد QR لكل الفصول');
-  };
+  document.querySelectorAll('[data-print]').forEach(b=> b.onclick = ()=> printQRClasses([b.dataset.print]));
+  document.getElementById('printAll').onclick = ()=> printQRClasses(visibleClasses().map(c=>c.id));
 }
+function printQRClasses(classIds){
+  const classes=(visibleClasses()||[]).filter(c=>classIds.includes(c.id));
+  if(!classes.length){ toast('لا توجد فصول للطباعة', true); return; }
+  const w=window.open('', '_blank');
+  if(!w){ toast('يرجى السماح بالنوافذ المنبثقة للطباعة', true); return; }
+
+  const cards=classes.map(c=>`
+    <div class="qr-card">
+      <div class="qr-school">${esc(SCHOOL_NAME)}</div>
+      <div class="qr-class">${esc(c.name)}</div>
+      <div class="qr-box" id="print-qr-${esc(c.id)}"></div>
+      <div class="qr-hint">امسحي الكود لبدء رصد الغياب</div>
+    </div>`).join('');
+
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head>
+    <meta charset="UTF-8"><title>أكواد QR للفصول</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+    <style>
+      body{font-family:'Cairo',sans-serif;padding:20px;direction:rtl;background:#fff}
+      .qr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px}
+      .qr-card{border:2px solid #102a43;border-radius:14px;padding:18px;text-align:center;page-break-inside:avoid;break-inside:avoid;background:#fff}
+      .qr-school{font-size:11px;color:#555}.qr-class{font-size:18px;font-weight:800;color:#102a43;margin:6px 0 12px}
+      .qr-box{display:flex;justify-content:center;align-items:center;min-height:150px;margin-bottom:10px}
+      .qr-box canvas,.qr-box img{display:block;width:150px;height:150px;margin:0 auto}
+      .qr-hint{font-size:11px;color:#0f766e;font-weight:700}
+      @media print{.qr-card{page-break-inside:avoid;break-inside:avoid}.qr-box canvas,.qr-box img{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+    </style>
+  </head><body><div class="qr-grid">${cards}</div></body></html>`);
+  w.document.close();
+
+  const build=()=>{
+    try{
+      classes.forEach(c=>{
+        const box=w.document.getElementById('print-qr-'+c.id);
+        if(box && w.QRCode){
+          box.innerHTML='';
+          new w.QRCode(box,{text:classScanUrl(c.id),width:150,height:150,colorDark:'#102a43',colorLight:'#ffffff',correctLevel:w.QRCode.CorrectLevel.M});
+        }
+      });
+      setTimeout(()=>{w.focus();w.print();},900);
+    }catch(e){ try{w.close();}catch(_){} toast('تعذّر تجهيز الباركود للطباعة', true); }
+  };
+  if(w.QRCode) build(); else setTimeout(build,1000);
+}
+
 function printElement(html, title){
   const w = window.open('', '_blank');
   if(!w){ toast('يرجى السماح بالنوافذ المنبثقة للطباعة', true); return; }
-
-  // إصلاح طباعة QR: qrcodejs قد ينشئ الكود داخل canvas،
-  // ونسخ outerHTML للـcanvas لا ينقل الرسم نفسه إلى نافذة الطباعة.
-  const holder = document.createElement('div');
-  holder.innerHTML = html;
-  holder.querySelectorAll('canvas').forEach(canvas=>{
-    try{
-      const img = document.createElement('img');
-      img.src = canvas.toDataURL('image/png');
-      img.width = canvas.width || 150;
-      img.height = canvas.height || 150;
-      img.alt = 'QR Code';
-      img.style.display = 'block';
-      img.style.width = (canvas.width || 150) + 'px';
-      img.style.height = (canvas.height || 150) + 'px';
-      img.style.margin = '0 auto';
-      canvas.replaceWith(img);
-    }catch(e){}
-  });
-  const printableHtml = holder.innerHTML;
-
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(title)}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap" rel="stylesheet">
-  <style>
-    body{font-family:'Cairo',sans-serif; padding:20px; direction:rtl;}
-    .qr-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:20px;}
-    .qr-card{border:2px solid #102a43; border-radius:14px; padding:18px; text-align:center; page-break-inside:avoid;}
-    .qr-school{font-size:11px; color:#555;}
-    .qr-class{font-size:18px; font-weight:800; color:#102a43; margin:6px 0 12px;}
-    .qr-box{display:flex; justify-content:center; align-items:center; min-height:150px; margin-bottom:10px;}
-    .qr-box img{display:block; width:150px; height:150px; margin:0 auto;}
-    .qr-hint{font-size:11px; color:#0f766e; font-weight:700;}
-    .qr-actions{display:none;}
-    @media print{
-      .qr-card{break-inside:avoid; page-break-inside:avoid;}
-      .qr-box img{print-color-adjust:exact; -webkit-print-color-adjust:exact;}
-    }
-  </style></head><body>${printableHtml}</body></html>`);
+  <style>body{font-family:'Cairo',sans-serif;padding:20px;direction:rtl;}</style></head><body>${html}</body></html>`);
   w.document.close();
-  setTimeout(()=>{ w.focus(); w.print(); }, 700);
+  setTimeout(()=>{w.focus();w.print();},500);
 }
-
 /* ==========================================================================
    إدارة الإداريات (Staff)
    ========================================================================== */
