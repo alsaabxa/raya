@@ -1720,6 +1720,28 @@ function bindQR(){
 }
 function printElement(html, title){
   const w = window.open('', '_blank');
+  if(!w){ toast('يرجى السماح بالنوافذ المنبثقة للطباعة', true); return; }
+
+  // إصلاح طباعة QR: qrcodejs قد ينشئ الكود داخل canvas،
+  // ونسخ outerHTML للـcanvas لا ينقل الرسم نفسه إلى نافذة الطباعة.
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  holder.querySelectorAll('canvas').forEach(canvas=>{
+    try{
+      const img = document.createElement('img');
+      img.src = canvas.toDataURL('image/png');
+      img.width = canvas.width || 150;
+      img.height = canvas.height || 150;
+      img.alt = 'QR Code';
+      img.style.display = 'block';
+      img.style.width = (canvas.width || 150) + 'px';
+      img.style.height = (canvas.height || 150) + 'px';
+      img.style.margin = '0 auto';
+      canvas.replaceWith(img);
+    }catch(e){}
+  });
+  const printableHtml = holder.innerHTML;
+
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(title)}</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;800&display=swap" rel="stylesheet">
   <style>
@@ -1728,12 +1750,17 @@ function printElement(html, title){
     .qr-card{border:2px solid #102a43; border-radius:14px; padding:18px; text-align:center; page-break-inside:avoid;}
     .qr-school{font-size:11px; color:#555;}
     .qr-class{font-size:18px; font-weight:800; color:#102a43; margin:6px 0 12px;}
-    .qr-box{display:flex; justify-content:center; margin-bottom:10px;}
+    .qr-box{display:flex; justify-content:center; align-items:center; min-height:150px; margin-bottom:10px;}
+    .qr-box img{display:block; width:150px; height:150px; margin:0 auto;}
     .qr-hint{font-size:11px; color:#0f766e; font-weight:700;}
     .qr-actions{display:none;}
-  </style></head><body>${html}</body></html>`);
+    @media print{
+      .qr-card{break-inside:avoid; page-break-inside:avoid;}
+      .qr-box img{print-color-adjust:exact; -webkit-print-color-adjust:exact;}
+    }
+  </style></head><body>${printableHtml}</body></html>`);
   w.document.close();
-  setTimeout(()=>{ w.focus(); w.print(); }, 400);
+  setTimeout(()=>{ w.focus(); w.print(); }, 700);
 }
 
 /* ==========================================================================
