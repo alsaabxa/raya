@@ -613,6 +613,9 @@ function uid(){ return 'id' + Date.now().toString(36) + Math.random().toString(3
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function nowTimeStr(){ const d=new Date(); return d.toLocaleTimeString('ar-SA-u-nu-latn', {hour:'2-digit', minute:'2-digit', hour12:true}); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function normalizePhone(phone){ let n=numStr(phone).replace(/\D/g,''); if(n.startsWith('00966')) n=n.slice(2); if(n.startsWith('05')) n='966'+n.slice(1); else if(n.startsWith('5')&&n.length===9) n='966'+n; else if(n.startsWith('0')&&n.length===10) n='966'+n.slice(1); return n; }
+function studentGuardianPhone(student){ return normalizePhone(student?.guardianPhone||student?.parentPhone||student?.phone||''); }
+function absenceWhatsAppUrl(student, className, date){ const phone=studentGuardianPhone(student); if(!phone)return ''; const message='السلام عليكم، نحيطكم علمًا بغياب الطالبة '+student.name+' بتاريخ '+date+' عن فصل '+className+' في '+SCHOOL_NAME+'. شاكرين تعاونكم.'; return 'https://wa.me/'+phone+'?text='+encodeURIComponent(message); }
 
 function toast(msg, isErr){
   const t = document.getElementById('toast');
@@ -669,7 +672,8 @@ async function pullFromServer(silent){
     if(data.ok){
       const sigBefore = scanSig();
       const nextClasses = (data.classes||[]).map(c=>({id:String(c.id).trim(), number:c.number, name:c.name}));
-      const nextStudents = (data.students||[]).map(s=>({id:String(s.id).trim(), classId:String(s.classId||'').trim(), number:numStr(s.number), name:s.name}));
+      const localPhoneByStudent = new Map((store.students||[]).map(s=>[String(s.id).trim(),studentGuardianPhone(s)]));
+      const nextStudents = (data.students||[]).map(s=>({id:String(s.id).trim(), classId:String(s.classId||'').trim(), number:numStr(s.number), name:s.name, guardianPhone:normalizePhone(s.guardianPhone||s.parentPhone||s.phone||localPhoneByStudent.get(String(s.id).trim())||'')}));
       const nextStaff = (data.staff||[]).map(s=>({id:s.id, name:s.name, role:s.role, username:s.username, password:s.password, classes: typeof s.classes==='string' ? s.classes.split(',').filter(Boolean) : (s.classes||[])}));
       // أسماء المعلمات السريعة (اختيارية) — إن كان الخادم لا يدعمها بعد، نُبقي القائمة المحلية كما هي.
       const nextTeacherNames = Array.isArray(data.teacherNames) ? data.teacherNames.filter(Boolean) : store.teacherNames;
@@ -854,6 +858,7 @@ function renderInner(){
       case 'scan': app.innerHTML = viewScan(route.classId); bindScan(); break;
       case 'qr': app.innerHTML = viewQR(); bindQR(); break;
       case 'reports': app.innerHTML = viewReports(); bindReports(); break;
+      case 'guardians': app.innerHTML = viewGuardians(); bindGuardians(); break;
       case 'manage': app.innerHTML = viewManage(); bindManage(); break;
       case 'staff': app.innerHTML = viewStaff(); bindStaff(); break;
       default: app.innerHTML = viewDashboard(); bindDashboard();
@@ -875,6 +880,7 @@ function renderTopnav(){
   links += `<a class="nav-btn ${route.name==='reports'?'active':''}" data-nav="reports">التقارير</a>`;
   if(session.type==='admin'){
     links += `<a class="nav-btn ${route.name==='manage'?'active':''}" data-nav="manage">إدارة الفصول والطالبات</a>`;
+    links += `<a class="nav-btn ${route.name==='guardians'?'active':''}" data-nav="guardians">أولياء الأمور</a>`;
     links += `<a class="nav-btn ${route.name==='staff'?'active':''}" data-nav="staff">الإداريات</a>`;
   }
   nav.innerHTML = `
@@ -1190,7 +1196,7 @@ function openClassModal(existing){
       document.getElementById('editStudentCount').textContent = studentsOfClass(existing.id).length;
       document.getElementById('editStudentsList').innerHTML = list.map(s=>`
         <div class="list-row">
-          <div class="info"><b>${esc(s.name)}</b><span>رقم ${esc(s.number)}</span></div>
+          <div class="info"><b>${esc(s.name)}</b><span>رقم ${esc(s.number)} · ولي الأمر: ${studentGuardianPhone(s)?esc(studentGuardianPhone(s)):'غير مضاف'}</span></div>
           <div class="row-actions">
             <button class="icon-btn" data-move-student-inline="${s.id}" title="نقل إلى فصل آخر">↔</button>
             <button class="icon-btn" data-edit-student-inline="${s.id}" title="تعديل">✎</button>
@@ -1491,6 +1497,7 @@ function openStudentFormModal(classId, existing, onDone){
         <div class="two-col">
           <div class="field"><label>رقم الطالبة</label><input id="sNum" value="${existing?esc(existing.number):''}"></div>
           <div class="field"><label>الاسم الكامل</label><input id="sName" value="${existing?esc(existing.name):''}"></div>
+          <div class="field"><label>رقم جوال ولي الأمر</label><input id="sGuardianPhone" inputmode="tel" placeholder="05xxxxxxxx" value="${existing?esc(studentGuardianPhone(existing)): ''}"></div>
         </div>
       </div>
       <div class="modal-foot"><button class="btn btn-outline" id="cancel2">إلغاء</button><button class="btn btn-primary" id="save2">حفظ</button></div>
@@ -1505,13 +1512,15 @@ function openStudentFormModal(classId, existing, onDone){
     const name = wrap.querySelector('#sName').value.trim();
     const number = wrap.querySelector('#sNum').value.trim();
     const clsId = wrap.querySelector('#sClass').value;
+    const guardianPhone=normalizePhone(wrap.querySelector('#sGuardianPhone').value);
+    if(guardianPhone && guardianPhone.length<10){ toast('تحققي من رقم جوال ولي الأمر',true); return; }
     if(!name){ toast('أدخلي اسم الطالبة', true); return; }
     if(existing){
-      existing.name=name; existing.number=number; existing.classId=clsId;
+      existing.name=name; existing.number=number; existing.classId=clsId; existing.guardianPhone=guardianPhone;
       saveStore(); await pushToServer('saveStudent', existing);
       toast('تم تحديث بيانات الطالبة');
     }else{
-      const st = { id: uid(), classId: clsId, number, name };
+      const st = { id: uid(), classId: clsId, number, name, guardianPhone };
       store.students.push(st); saveStore();
       await pushToServer('saveStudent', st);
       toast('تمت إضافة الطالبة');
@@ -1947,7 +1956,7 @@ function viewManage(){
         </div>
         <div id="manageStudentList" style="max-height:440px;overflow:auto;margin-top:14px">
           ${students.map((s,i)=>`<div class="list-row manage-student-row" data-student-row="${esc(s.id)}">
-            <label style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer"><input type="checkbox" class="manage-student-check" value="${esc(s.id)}"><span class="info"><b>${esc(s.name)}</b><span>رقم ${esc(s.number||i+1)}</span></span></label>
+            <label style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer"><input type="checkbox" class="manage-student-check" value="${esc(s.id)}"><span class="info"><b>${esc(s.name)}</b><span>رقم ${esc(s.number||i+1)} · ولي الأمر: ${studentGuardianPhone(s)?esc(studentGuardianPhone(s)):'غير مضاف'}</span></span></label>
             <div class="row-actions"><button class="icon-btn" data-manage-student-move="${esc(s.id)}" title="نقل الطالبة إلى فصل آخر">↔</button><button class="icon-btn" data-manage-student-edit="${esc(s.id)}">✎</button><button class="icon-btn del" data-manage-student-delete="${esc(s.id)}">🗑</button></div>
           </div>`).join('') || '<div class="empty"><b>لا توجد طالبات في هذا الفصل</b></div>'}
         </div>
@@ -2101,6 +2110,63 @@ function reportData(type, anchor, classId){
   classes.forEach(c=>{ if(!byClass[c.id]) byClass[c.id]={classId:c.id,className:c.name,days:new Set(),present:0,absent:0,total:0}; });
   return {from,to,label:range.label,sessions,byStudent:Object.values(byStudent),byClass:Object.values(byClass)};
 }
+function viewGuardians(){
+  const classes=visibleClasses(), students=classes.flatMap(c=>studentsOfClass(c.id).map(st=>({student:st,className:c.name})));
+  return `<div class="container"><div class="page-title"><div><h2>أولياء الأمور</h2><p>أرقام التواصل وإشعارات الغياب عبر واتساب</p></div></div><div class="card" style="padding:18px"><div class="report-filters" style="grid-template-columns:1fr 1fr"><div class="field"><label>الفصل</label><select id="guardianClassFilter"><option value="__all__">كل الفصول</option>${classes.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></div><div class="field"><label>بحث</label><input id="guardianSearch" placeholder="اسم الطالبة أو رقم الجوال"></div></div><div class="report-table-wrap" style="overflow:auto"><table class="report-table"><thead><tr><th>#</th><th>اسم الطالبة</th><th>الفصل</th><th>رقم جوال ولي الأمر</th><th>إشعار الغياب</th><th>تعديل</th></tr></thead><tbody id="guardianRows">${students.map(({student,className},i)=>{const att=attendanceOf(student.classId);const absent=att?.records?.some(r=>(String(r.studentId)===String(student.id)||r.studentName===student.name)&&r.status==='غائب');const link=absent?absenceWhatsAppUrl(student,className,todayStr()):'';return `<tr data-guardian-row data-class="${esc(student.classId)}" data-search="${esc((student.name+' '+studentGuardianPhone(student)).toLowerCase())}"><td>${i+1}</td><td>${esc(student.name)}</td><td>${esc(className)}</td><td>${studentGuardianPhone(student)?esc(studentGuardianPhone(student)):'—'}</td><td>${link?`<a class="btn btn-sm" style="background:#25d366;color:#fff" href="${esc(link)}" target="_blank" rel="noopener">فتح واتساب</a>`:'—'}</td><td><button class="btn btn-outline btn-sm" data-edit-guardian="${esc(student.id)}">تعديل الرقم</button></td></tr>`;}).join('')||'<tr><td colspan="6">لا توجد طالبات</td></tr>'}</tbody></table></div><p class="muted" style="margin-top:10px">رسالة واتساب تفتح جاهزة للمراجعة والإرسال.</p></div><div id="modalHost"></div></div>`;
+}
+function bindGuardians(){
+  const filter=()=>{
+    const cls=document.getElementById('guardianClassFilter').value, q=document.getElementById('guardianSearch').value.trim().toLowerCase();
+    document.querySelectorAll('[data-guardian-row]').forEach(row=>row.style.display=(cls==='__all__'||row.dataset.class===cls)&&row.dataset.search.includes(q)?'':'none');
+  };
+  document.getElementById('guardianClassFilter').onchange=filter;
+  document.getElementById('guardianSearch').oninput=filter;
+  document.querySelectorAll('[data-edit-guardian]').forEach(btn=>btn.onclick=()=>{const st=store.students.find(s=>s.id===btn.dataset.editGuardian);if(st)openStudentFormModal(st.classId,st,()=>render());});
+}
+function openWhatsAppAbsenceReport(){
+  const classes=visibleClasses();
+  if(!classes.length){toast('لا توجد فصول',true);return;}
+  const host=document.getElementById('modalHost')||(()=>{const d=document.createElement('div');d.id='modalHost';document.body.appendChild(d);return d;})();
+  const anchor=document.getElementById('reportDate').value||todayStr();
+  const selectedClass=document.getElementById('reportClass').value;
+  const selectedType=document.getElementById('reportType').value;
+  host.innerHTML=`<div class="overlay" id="waReportOverlay"><div class="modal wide"><div class="modal-head"><h3>تقرير واتساب الغياب</h3><button class="modal-close" id="waReportClose">✕</button></div><div class="modal-body"><header style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #0f766e;padding-bottom:12px;margin-bottom:14px"><img src="school-logo.svg" alt="شعار المدرسة" style="width:76px;height:70px;object-fit:contain"><div><h2 style="color:#102a43">${esc(SCHOOL_NAME)}</h2><h3 style="color:#0f766e">إشعارات غياب الطالبات</h3></div></header><div class="report-filters"><div class="field"><label>نوع التقرير</label><select id="waReportType"><option value="daily" ${selectedType==='daily'?'selected':''}>يومي</option><option value="weekly" ${selectedType==='weekly'?'selected':''}>أسبوعي</option><option value="monthly" ${selectedType==='monthly'?'selected':''}>شهري</option></select></div><div class="field"><label>التاريخ المرجعي</label><input type="date" id="waReportAnchor" value="${esc(anchor)}"></div><div class="field"><label>الفصل</label><select id="waReportClass"><option value="">كل الفصول</option>${classes.map(c=>`<option value="${esc(c.id)}" ${selectedClass===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" id="waReportExcel">📊 Excel</button><button class="btn btn-primary btn-sm" id="waReportPdf">📄 طباعة / PDF</button></div></div><div id="waReportContent"></div></div></div></div>`;
+  const typeEl=document.getElementById('waReportType'),dateEl=document.getElementById('waReportAnchor'),classEl=document.getElementById('waReportClass'),content=document.getElementById('waReportContent');
+  const getRows=()=>{
+    const d=reportData(typeEl.value,dateEl.value||todayStr(),classEl.value), rows=[];
+    d.sessions.forEach(att=>{
+      const cls=store.classes.find(c=>c.id===att.classId), className=cls?.name||'—';
+      (att.records||[]).filter(r=>r.status==='غائب').forEach(rec=>{
+        const student=store.students.find(st=>String(st.id)===String(rec.studentId))||{name:rec.studentName,guardianPhone:''};
+        rows.push({name:rec.studentName||student.name,className,date:att.date,phone:studentGuardianPhone(student),link:absenceWhatsAppUrl(student,className,att.date),status:'غائبة',notice:'تم التبليغ'});
+      });
+    });
+    rows.sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.className.localeCompare(b.className,'ar')||a.name.localeCompare(b.name,'ar'));
+    return {rows,d};
+  };
+  const render=()=>{
+    const {rows,d}=getRows();
+    const body=rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td>${esc(r.date)}</td><td class="status-absent">${r.status}</td><td>${r.phone?esc(r.phone):'—'}</td><td style="color:#15803d;font-weight:800">${r.notice}</td><td>${r.link?`<a class="btn btn-sm" style="background:#25d366;color:#fff" href="${esc(r.link)}" target="_blank" rel="noopener">فتح واتساب</a>`:'لا يوجد رقم'}</td></tr>`).join('');
+    content.innerHTML=`<p class="muted" style="margin:10px 0">الفترة: ${esc(formatDateArText(d.from))} إلى ${esc(formatDateArText(d.to))} — عدد الغائبات: ${rows.length}</p><div class="report-table-wrap" style="overflow:auto"><table class="report-table"><thead><tr><th>#</th><th>اسم الطالبة</th><th>الفصل</th><th>التاريخ</th><th>الحالة</th><th>جوال ولي الأمر</th><th>التبليغ</th><th>واتساب</th></tr></thead><tbody>${body||'<tr><td colspan="8" style="text-align:center;padding:24px">لا توجد حالات غياب في الفترة</td></tr>'}</tbody></table></div><p class="muted" style="margin-top:10px">تُفتح الرسائل في واتساب، ثم راجعيها واضغطي إرسال.</p>`;
+  };
+  const exportExcel=()=>{
+    if(typeof XLSX==='undefined'){toast('تعذر تحميل مكتبة Excel',true);return;}
+    const {rows,d}=getRows(), data=[[SCHOOL_NAME],['تقرير واتساب الغياب — '+d.label],['الفترة: '+d.from+' إلى '+d.to],[],['اسم الطالبة','الفصل','التاريخ','الحالة','رقم جوال ولي الأمر','التبليغ'],...rows.map(r=>[r.name,r.className,r.date,r.status,r.phone,r.notice])];
+    const ws=XLSX.utils.aoa_to_sheet(data), wb=XLSX.utils.book_new();ws['!cols']=[{wch:28},{wch:22},{wch:16},{wch:14},{wch:24},{wch:18}];XLSX.utils.book_append_sheet(wb,ws,'واتساب الغياب');XLSX.writeFile(wb,`تقرير_واتساب_${d.label}_${d.from}_${d.to}.xlsx`);
+  };
+  const printPdf=()=>{
+    const {rows,d}=getRows();
+    const body=rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.className)}</td><td>${esc(r.date)}</td><td>${r.status}</td><td>${r.phone?esc(r.phone):'—'}</td><td>${r.notice}</td></tr>`).join('');
+    const logo=document.querySelector('.report-page-header img')?.src||'school-logo.svg';
+    const html=`<header style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #0f766e;padding-bottom:12px;margin-bottom:16px"><img src="${esc(logo)}" style="width:82px;height:70px;object-fit:contain" alt="شعار المدرسة"><div><h1>${esc(SCHOOL_NAME)}</h1><h2>تقرير واتساب الغياب — ${esc(d.label)}</h2><p>الفترة: ${esc(d.from)} إلى ${esc(d.to)} — تم التبليغ</p></div></header><table style="width:100%;border-collapse:collapse" border="1" cellpadding="8"><thead><tr><th>#</th><th>اسم الطالبة</th><th>الفصل</th><th>التاريخ</th><th>الحالة</th><th>جوال ولي الأمر</th><th>التبليغ</th></tr></thead><tbody>${body||'<tr><td colspan="7">لا توجد حالات غياب</td></tr>'}</tbody></table>`;
+    printElement(html,`تقرير واتساب الغياب ${d.label}`);
+  };
+  [typeEl,dateEl,classEl].forEach(el=>el.onchange=render);
+  document.getElementById('waReportExcel').onclick=exportExcel;document.getElementById('waReportPdf').onclick=printPdf;
+  const close=()=>host.innerHTML='';document.getElementById('waReportClose').onclick=close;document.getElementById('waReportOverlay').onclick=e=>{if(e.target.id==='waReportOverlay')close();};
+  render();
+}
+
 function viewReports(){
   const firstClass=visibleClasses()[0]?.id||'';
   return `<div class="container">
@@ -2114,7 +2180,7 @@ function viewReports(){
         <div class="field"><label>الفصل</label><select id="reportClass"><option value="">كل الفصول</option>${visibleClasses().map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></div>
         <div class="field"><label>اسم المدرسة</label><input id="reportSchool" value="${esc(SCHOOL_NAME)}" readonly></div>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;"><button class="btn btn-outline" id="refreshReport">تحديث التقرير</button><button class="btn btn-gold" id="reportExcelBtn">📊 تصدير Excel</button></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;"><button class="btn btn-outline" id="refreshReport">تحديث التقرير</button><button class="btn btn-gold" id="reportExcelBtn">📊 تصدير Excel</button><button class="btn btn-outline" id="waAbsenceReportBtn">📱 تقرير واتساب الغياب</button></div>
     </div>
     <div id="reportPreview"></div>
   </div>`;
@@ -2169,6 +2235,7 @@ function bindReports(){
   document.getElementById('refreshReport').onclick=renderReportPreview;
   document.getElementById('reportPdfBtn').onclick=exportPeriodPDF;
   document.getElementById('reportExcelBtn').onclick=exportPeriodExcel;
+  document.getElementById('waAbsenceReportBtn').onclick=openWhatsAppAbsenceReport;
   renderReportPreview();
   document.querySelectorAll('[data-open-student-profile]').forEach(b=>b.onclick=()=>openStudentProfileById(b.dataset.openStudentProfile));
 }
@@ -2273,3 +2340,4 @@ init();
 </script>
 </body>
 </html>
+
